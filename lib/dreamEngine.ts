@@ -36,16 +36,30 @@ export function validateDreamInput(dream: string): DreamValidation {
   return { valid: true };
 }
 
-function matchesKeyword(text: string, item: DreamKeyword): boolean {
-  const words = [item.keyword, ...(item.aliases ?? [])];
-  return words.some((word) => word && text.includes(word));
+// 한국어는 조사(이/가/을/를/에게 등)가 명사 뒤에 그대로 붙기 때문에, 문장을
+// 어절(공백 기준 토큰) 단위로 나눈 뒤 "어절이 해당 단어로 시작하는지"를 검사합니다.
+// 예) "고양이가" -> "고양이"로 시작 (매칭 O), "이야기" -> "이"로 시작하지만 별도 어절이라
+// "이빨"의 별칭 "이"처럼 아주 짧은 단어와 우연히 겹칠 위험을 크게 줄여줍니다.
+// (완벽한 형태소 분석은 아니지만, 단순 부분 문자열(includes) 검색보다 오탐이 훨씬 적습니다.)
+function tokenize(text: string): string[] {
+  return text.split(/[\s,.!?~"'()\[\]{}·、。]+/).filter(Boolean);
 }
 
-function detectSituations(text: string, keyword: string) {
+function containsAsWord(tokens: string[], word: string): boolean {
+  if (!word) return false;
+  return tokens.some((token) => token.startsWith(word));
+}
+
+function matchesKeyword(tokens: string[], item: DreamKeyword): boolean {
+  const words = [item.keyword, ...(item.aliases ?? [])];
+  return words.some((word) => containsAsWord(tokens, word));
+}
+
+function detectSituations(tokens: string[], keyword: string) {
   const matched: { type: string; sentence: string }[] = [];
 
   for (const situation of situations) {
-    const hit = situation.words.some((word) => text.includes(word));
+    const hit = situation.words.some((word) => containsAsWord(tokens, word));
     if (hit) {
       matched.push({
         type: situation.type,
@@ -57,11 +71,11 @@ function detectSituations(text: string, keyword: string) {
   return matched;
 }
 
-function detectEmotions(text: string) {
+function detectEmotions(tokens: string[]) {
   const matched: string[] = [];
 
   for (const emotion of emotions) {
-    const hit = emotion.words.some((word) => text.includes(word));
+    const hit = emotion.words.some((word) => containsAsWord(tokens, word));
     if (hit) {
       matched.push(emotion.label);
     }
@@ -72,12 +86,13 @@ function detectEmotions(text: string) {
 
 export function analyzeDream(dream: string): DreamAnalysis {
   const text = dream.trim();
+  const tokens = tokenize(text);
 
   const matchedKeywords = coreDreamKeywords.filter((item) =>
-    matchesKeyword(text, item)
+    matchesKeyword(tokens, item)
   );
 
-  const detectedEmotions = Array.from(new Set(detectEmotions(text)));
+  const detectedEmotions = Array.from(new Set(detectEmotions(tokens)));
 
   if (matchedKeywords.length === 0) {
     return {
@@ -98,7 +113,7 @@ export function analyzeDream(dream: string): DreamAnalysis {
   const situationTypes = new Set<string>();
 
   for (const item of matchedKeywords) {
-    const hits = detectSituations(text, item.keyword);
+    const hits = detectSituations(tokens, item.keyword);
     for (const hit of hits) {
       situationTypes.add(hit.type);
       situationSentences.push(hit.sentence);
