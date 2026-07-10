@@ -1,37 +1,145 @@
-import { dreamDictionary } from "../data/dreamDictionary";
-import type { DreamAnalysis } from "../types/dream";
+import { coreDreamKeywords } from "../data/dreamDictionary";
+import { situations } from "../data/situations";
+import { emotions } from "../data/emotions";
+import type { DreamAnalysis, DreamKeyword } from "../types/dream";
+
+export const MIN_DREAM_LENGTH = 5;
+export const MAX_DREAM_LENGTH = 2000;
+
+export type DreamValidation = {
+  valid: boolean;
+  message?: string;
+};
+
+/** 꿈 입력값에 대한 기본적인 유효성 검사 (빈 입력, 너무 짧음, 너무 긴 입력) */
+export function validateDreamInput(dream: string): DreamValidation {
+  const text = dream.trim();
+
+  if (!text) {
+    return { valid: false, message: "꿈 내용을 먼저 입력해주세요." };
+  }
+
+  if (text.length < MIN_DREAM_LENGTH) {
+    return {
+      valid: false,
+      message: "꿈 내용을 조금 더 자세히 입력해주세요. (5자 이상)",
+    };
+  }
+
+  if (text.length > MAX_DREAM_LENGTH) {
+    return {
+      valid: false,
+      message: "꿈 내용은 2,000자 이하로 입력해주세요.",
+    };
+  }
+
+  return { valid: true };
+}
+
+function matchesKeyword(text: string, item: DreamKeyword): boolean {
+  const words = [item.keyword, ...(item.aliases ?? [])];
+  return words.some((word) => word && text.includes(word));
+}
+
+function detectSituations(text: string, keyword: string) {
+  const matched: { type: string; sentence: string }[] = [];
+
+  for (const situation of situations) {
+    const hit = situation.words.some((word) => text.includes(word));
+    if (hit) {
+      matched.push({
+        type: situation.type,
+        sentence: situation.description.replace("%s", keyword),
+      });
+    }
+  }
+
+  return matched;
+}
+
+function detectEmotions(text: string) {
+  const matched: string[] = [];
+
+  for (const emotion of emotions) {
+    const hit = emotion.words.some((word) => text.includes(word));
+    if (hit) {
+      matched.push(emotion.label);
+    }
+  }
+
+  return matched;
+}
 
 export function analyzeDream(dream: string): DreamAnalysis {
   const text = dream.trim();
 
-  const matchedKeywords = dreamDictionary.filter((item) =>
-    text.includes(item.keyword)
+  const matchedKeywords = coreDreamKeywords.filter((item) =>
+    matchesKeyword(text, item)
   );
+
+  const detectedEmotions = Array.from(new Set(detectEmotions(text)));
 
   if (matchedKeywords.length === 0) {
     return {
-      summary: "입력하신 꿈에서 등록된 대표 키워드는 발견되지 않았습니다.",
+      summary: "입력하신 꿈에서 등록된 대표 상징은 발견되지 않았습니다.",
       keywords: [],
+      emotions: detectedEmotions,
+      situations: [],
       interpretation:
         "이 꿈은 특정 상징보다는 꿈을 꿀 때 느꼈던 감정과 전체 분위기를 중심으로 해석하는 것이 좋습니다.",
-      advice:
-        "꿈속에서 가장 강하게 남은 감정과 장면을 다시 떠올려보세요.",
+      advice: "꿈속에서 가장 강하게 남은 감정과 장면을 다시 떠올려보세요.",
+      relatedKeywords: [],
     };
   }
 
   const keywordNames = matchedKeywords.map((item) => item.keyword).join(", ");
 
+  const situationSentences: string[] = [];
+  const situationTypes = new Set<string>();
+
+  for (const item of matchedKeywords) {
+    const hits = detectSituations(text, item.keyword);
+    for (const hit of hits) {
+      situationTypes.add(hit.type);
+      situationSentences.push(hit.sentence);
+    }
+  }
+
+  const interpretationParts = matchedKeywords.map(
+    (item) =>
+      `${item.emoji ?? ""} ${item.keyword}: ${item.meaning} ${item.good} 다만 ${item.caution}`
+  );
+
+  if (situationSentences.length > 0) {
+    interpretationParts.push(...situationSentences);
+  }
+
+  if (detectedEmotions.length > 0) {
+    interpretationParts.push(
+      `꿈속에서 느껴진 감정은 ${detectedEmotions.join(", ")}(으)로 분석됩니다. 상징과 감정을 함께 살펴보면 현재 마음 상태를 더 입체적으로 이해할 수 있습니다.`
+    );
+  }
+
+  const relatedKeywords = Array.from(
+    new Set(
+      matchedKeywords.flatMap((item) => item.related ?? [])
+    )
+  )
+    .filter((name) => !matchedKeywords.some((item) => item.keyword === name))
+    .slice(0, 6);
+
   return {
-    summary: `이 꿈에서는 ${keywordNames} 상징이 발견되었습니다.`,
+    summary:
+      situationTypes.size > 0
+        ? `이 꿈에서는 ${keywordNames} 상징과 함께 ${Array.from(situationTypes).join(", ")} 상황이 발견되었습니다.`
+        : `이 꿈에서는 ${keywordNames} 상징이 발견되었습니다.`,
     keywords: matchedKeywords,
-    interpretation: matchedKeywords
-      .map(
-        (item) =>
-          `${item.emoji} ${item.keyword}: ${item.meaning} ${item.good} 다만 ${item.caution}`
-      )
-      .join("\n\n"),
+    emotions: detectedEmotions,
+    situations: Array.from(situationTypes),
+    interpretation: interpretationParts.join("\n\n"),
     advice:
-      "꿈은 현실을 그대로 예언한다기보다 현재 마음 상태를 상징적으로 보여주는 경우가 많습니다.",
+      "꿈은 현실을 그대로 예언한다기보다 현재 마음 상태를 상징적으로 보여주는 경우가 많습니다. 참고용으로 편안하게 받아들여보세요.",
+    relatedKeywords,
   };
 }
 
@@ -48,8 +156,21 @@ export function formatDreamAnalysis(analysis: DreamAnalysis): string {
     result += "\n";
   }
 
-  result += `3. 종합 해몽\n${analysis.interpretation}\n\n`;
-  result += `4. 현실 조언\n${analysis.advice}\n\n`;
+  if (analysis.emotions.length > 0) {
+    result += `3. 꿈속 감정\n${analysis.emotions.join(", ")}\n\n`;
+  }
+
+  if (analysis.situations.length > 0) {
+    result += `4. 발견된 상황\n${analysis.situations.join(", ")}\n\n`;
+  }
+
+  result += `5. 종합 해몽\n${analysis.interpretation}\n\n`;
+  result += `6. 현실 조언\n${analysis.advice}\n\n`;
+
+  if (analysis.relatedKeywords.length > 0) {
+    result += `7. 관련 꿈\n${analysis.relatedKeywords.join(", ")}\n\n`;
+  }
+
   result += "※ 이 해몽은 참고용입니다.";
 
   return result;

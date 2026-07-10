@@ -1,76 +1,66 @@
 "use client";
-import { analyzeDream, formatDreamAnalysis } from "../lib/dreamEngine";
+import { analyzeDream, validateDreamInput } from "../lib/dreamEngine";
 import { useState } from "react";
 
 import Header from "../components/Header";
 import Hero from "../components/Hero";
 import Footer from "../components/Footer";
+import AdBanner from "../components/AdBanner";
 
 import DreamInput from "../components/DreamInput";
 import KeywordGrid from "../components/KeywordGrid";
 import DreamResult from "../components/DreamResult";
 
-import { dreamDictionary } from "../data/dreamDictionary";
+import type { DreamAnalysis } from "../types/dream";
 
 export default function Home() {
   const [dream, setDream] = useState("");
-  const [result, setResult] = useState("");
+  const [analysis, setAnalysis] = useState<DreamAnalysis | null>(null);
+  const [error, setError] = useState("");
 
   function interpretDream() {
-  if (!dream.trim()) {
-    setResult("꿈 내용을 먼저 입력해주세요.");
-    return;
+    const validation = validateDreamInput(dream);
+
+    if (!validation.valid) {
+      setError(validation.message ?? "꿈 내용을 확인해주세요.");
+      setAnalysis(null);
+      return;
+    }
+
+    setError("");
+    setAnalysis(analyzeDream(dream));
   }
 
-  const analysis = analyzeDream(dream);
-  const formattedResult = formatDreamAnalysis(analysis);
-
-  setResult(formattedResult);
-}
-
   function selectKeyword(keyword: string) {
-    const item = dreamDictionary.find((d) => d.keyword === keyword);
-
-    if (!item) return;
-
-    setDream(`${keyword} 꿈`);
-
-    setResult(
-`${item.emoji} ${item.keyword}
-
-${item.meaning}
-
-좋은 의미
-${item.good}
-
-주의
-${item.caution}`
-    );
+    const text = `${keyword} 꿈`;
+    setDream(text);
+    setError("");
+    setAnalysis(analyzeDream(text));
   }
 
   return (
     <main className="min-h-screen bg-[#050b18]">
-
       <Header />
 
       <Hero />
 
-      <DreamInput
-        dream={dream}
-        setDream={setDream}
-        onInterpret={interpretDream}
-      />
+      <DreamInput dream={dream} setDream={setDream} onInterpret={interpretDream} />
 
-      <KeywordGrid
-        onSelectKeyword={selectKeyword}
-      />
+      {error && (
+        <p className="mx-auto mt-4 max-w-5xl rounded-2xl border border-rose-400/30 bg-rose-500/10 p-4 text-center text-rose-200">
+          {error}
+        </p>
+      )}
 
-      <DreamResult
-        result={result}
-      />
+      <AdBanner />
+
+      <KeywordGrid onSelectKeyword={selectKeyword} />
+
+      <DreamResult analysis={analysis} />
+
+      {analysis && <AdBanner />}
 
       <Footer />
-
     </main>
   );
 }
