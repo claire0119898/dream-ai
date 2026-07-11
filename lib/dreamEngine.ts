@@ -6,6 +6,17 @@ import type { DreamAnalysis, DreamKeyword } from "../types/dream";
 export const MIN_DREAM_LENGTH = 5;
 export const MAX_DREAM_LENGTH = 2000;
 
+// actions.json의 일부 키워드는 그 자체가 이미 특정 상황을 뜻하는 행동 단어입니다.
+// (예: "도망"이라는 키워드가 매칭됨 == "회피" 상황이 이미 일어난 것) 이런 조합에서는
+// "도망으로부터 도망쳤다면"처럼 순환적인 문장이 나오지 않도록 문장 생성을 건너뜁니다.
+const REDUNDANT_SITUATION_BY_KEYWORD: Record<string, string[]> = {
+  "도망": ["회피"],
+  "싸우다": ["갈등"],
+  "울다": ["슬픔표현"],
+  "웃다": ["기쁨표현"],
+  "죽다": ["종료"],
+};
+
 export type DreamValidation = {
   valid: boolean;
   message?: string;
@@ -76,6 +87,41 @@ function matchesKeyword(tokens: string[], item: DreamKeyword): boolean {
   return words.some((word) => containsAsWord(tokens, word));
 }
 
+// 한글 음절(가~힣)의 마지막 글자에 받침이 있는지 판별합니다.
+// (조사 이/가, 을/를, 와/과, 로/으로가 받침 유무에 따라 형태가 달라지기 때문에 필요합니다.)
+function hasBatchim(word: string): boolean {
+  const lastChar = word.charAt(word.length - 1);
+  const code = lastChar.charCodeAt(0);
+  if (code < 0xac00 || code > 0xd7a3) return false;
+  return (code - 0xac00) % 28 !== 0;
+}
+
+// 받침이 "ㄹ"로 끝나는 경우 "로/로부터"가 예외적으로 유지됩니다. (예: "길로", "물로부터")
+function endsWithRieul(word: string): boolean {
+  const lastChar = word.charAt(word.length - 1);
+  const code = lastChar.charCodeAt(0);
+  if (code < 0xac00 || code > 0xd7a3) return false;
+  return (code - 0xac00) % 28 === 8;
+}
+
+// situations.ts의 설명 문구에 들어있는 "%s[받침없음형/받침있음형]" 표기를 실제 조사로
+// 치환합니다. (예: "%s[가/이]" + "고양이" -> "고양이가", "%s[가/이]" + "뱀" -> "뱀이")
+function formatWithJosa(template: string, subject: string): string {
+  const withBatchim = hasBatchim(subject);
+
+  const filled = template.replace(
+    /%s\[([^/\]]+)\/([^\]]+)\]/g,
+    (_match, noBatchimForm: string, batchimForm: string) => {
+      const isRieulException =
+        (noBatchimForm === "로" || noBatchimForm === "로부터") && endsWithRieul(subject);
+      const particle = !withBatchim || isRieulException ? noBatchimForm : batchimForm;
+      return subject + particle;
+    }
+  );
+
+  return filled.split("%s").join(subject);
+}
+
 function detectSituations(tokens: string[], keyword: string) {
   const matched: { type: string; sentence: string }[] = [];
 
@@ -84,7 +130,7 @@ function detectSituations(tokens: string[], keyword: string) {
     if (hit) {
       matched.push({
         type: situation.type,
-        sentence: situation.description.replace("%s", keyword),
+        sentence: formatWithJosa(situation.description, keyword),
       });
     }
   }
@@ -116,6 +162,36 @@ export function analyzeDream(dream: string): DreamAnalysis {
   const detectedEmotions = Array.from(new Set(detectEmotions(tokens)));
 
   if (matchedKeywords.length === 0) {
+    // 등록된 상징(동물/사물/장소 등)은 없지만, 연예인·친구 이름처럼 사전에 없는
+    // 고유명사와 함께 "쫓겼다/홀대받았다" 같은 상황·행동은 표현된 경우가 많습니다.
+    // 이런 경우 특정 이름 자체를 인식할 수는 없어도, 그 상황만으로도 일반적인
+    // 해석은 가능하므로 "그 사람"을 주어로 한 해석을 대신 제공합니다.
+    const genericSituationHits = detectSituations(tokens, "그 사람");
+    const genericSituationTypes = Array.from(
+      new Set(genericSituationHits.map((hit) => hit.type))
+    );
+
+    if (genericSituationHits.length > 0) {
+      const interpretationParts = genericSituationHits.map((hit) => hit.sentence);
+
+      if (detectedEmotions.length > 0) {
+        interpretationParts.push(
+          `꿈속에서 느껴진 감정은 ${detectedEmotions.join(", ")}(으)로 분석됩니다.`
+        );
+      }
+
+      return {
+        summary: `이 꿈에서는 등록된 대표 상징은 없지만, 특정 인물과의 ${genericSituationTypes.join(", ")} 상황이 발견되었습니다.`,
+        keywords: [],
+        emotions: detectedEmotions,
+        situations: genericSituationTypes,
+        interpretation: interpretationParts.join("\n\n"),
+        advice:
+          "등장인물이 누구인지보다, 꿈속에서 그 사람과 있었던 상황과 그때 느낀 감정 자체에 집중해서 해석해보는 것을 추천합니다.",
+        relatedKeywords: [],
+      };
+    }
+
     return {
       summary: "입력하신 꿈에서 등록된 대표 상징은 발견되지 않았습니다.",
       keywords: [],
@@ -137,7 +213,16 @@ export function analyzeDream(dream: string): DreamAnalysis {
     const hits = detectSituations(tokens, item.keyword);
     for (const hit of hits) {
       situationTypes.add(hit.type);
-      situationSentences.push(hit.sentence);
+
+      // "도망"(행동 키워드) + "회피"(상황) 조합처럼, 매칭된 키워드 자체가 이미 그
+      // 상황을 뜻하는 행동 단어인 경우 "도망으로부터 도망쳤다면"처럼 문장이
+      // 순환적으로 어색해집니다. 이런 조합은 상황 태그는 유지하되 중복 문장은 생략합니다.
+      const isRedundantForKeyword =
+        REDUNDANT_SITUATION_BY_KEYWORD[item.keyword]?.includes(hit.type);
+
+      if (!isRedundantForKeyword) {
+        situationSentences.push(hit.sentence);
+      }
     }
   }
 

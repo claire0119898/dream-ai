@@ -58,6 +58,7 @@ const situations = [
   { type: "기쁨표현", phraseNoun: "함께 웃고 기뻐하는 상황", description: "%s와 함께 웃고 기뻐했다면, 그 상징이 현재 삶에 긍정적인 에너지를 더해주고 있다는 의미일 수 있습니다." },
   { type: "슬픔표현", phraseNoun: "울거나 슬퍼하는 상황", description: "%s와 관련해 울거나 슬퍼했다면, 그동안 표현하지 못한 감정이 꿈을 통해 드러난 것일 수 있습니다." },
   { type: "반복", phraseNoun: "반복해서 나타나는 상황", description: "%s가 꿈에 반복해서 등장했다면, 현실에서 그만큼 자주 신경 쓰이는 문제나 감정이라는 신호일 수 있습니다." },
+  { type: "무시", phraseNoun: "홀대받는 상황", description: "%s에게 홀대받거나 무시당했다면, 관계 속에서 존중받지 못한다는 서운함이나 인정받고 싶은 마음이 반영되었을 수 있습니다." },
 ];
 
 function toSlug(coreKeyword, situationType) {
