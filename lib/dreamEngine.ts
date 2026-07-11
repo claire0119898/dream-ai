@@ -45,8 +45,29 @@ function tokenize(text: string): string[] {
   return text.split(/[\s,.!?~"'()\[\]{}·、。]+/).filter(Boolean);
 }
 
+// 흔히 명사/어간 뒤에 붙는 조사 목록. 1글자 단어(뱀, 물, 말, 새, 산, 눈, 발...)는 한국어
+// 단어 중 우연히 그 글자로 "시작"하는 완전히 다른 뜻의 단어가 매우 많습니다.
+// (예: "말"(동물) vs "말했다"(speak), "발"(신체) vs "발생했다", "불"(자연) vs "불안했다")
+// 그래서 1글자 단어는 "단어 단독" 또는 "단어 + 알려진 조사"로 끝나는 어절일 때만 인정합니다.
+const JOSA_SUFFIXES = [
+  "이가", "이는", "이도", "이만", "이나",
+  "가", "은", "는", "을", "를", "이", "도", "만",
+  "에서", "에게", "한테", "까지", "부터", "처럼", "같이",
+  "와", "과", "이랑", "랑", "에", "로", "으로",
+];
+
 function containsAsWord(tokens: string[], word: string): boolean {
   if (!word) return false;
+
+  if (word.length === 1) {
+    return tokens.some((token) => {
+      if (token === word) return true;
+      if (!token.startsWith(word)) return false;
+      const remainder = token.slice(word.length);
+      return JOSA_SUFFIXES.includes(remainder);
+    });
+  }
+
   return tokens.some((token) => token.startsWith(word));
 }
 

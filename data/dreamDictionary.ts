@@ -7,9 +7,10 @@ import people from "./json/people.json";
 import places from "./json/places.json";
 import money from "./json/money.json";
 import actions from "./json/actions.json";
+import objects from "./json/objects.json";
 import generatedDreams from "./json/generated-dreams.json";
 
-// 손으로 직접 작성한 핵심 상징 84개. 실시간 꿈 분석과 SEO 상세 페이지(/dream/[slug])의
+// 손으로 직접 작성한 핵심 상징 93개. 실시간 꿈 분석과 SEO 상세 페이지(/dream/[slug])의
 // 기준이 되는 데이터입니다.
 export const coreDreamKeywords = [
   ...animals,
@@ -19,6 +20,7 @@ export const coreDreamKeywords = [
   ...places,
   ...money,
   ...actions,
+  ...objects,
 ] satisfies DreamKeyword[];
 
 // 핵심 상징 x 18개 상황을 조합해 자동 생성한 데이터 (scripts/generateDreamDatabase.mjs).
@@ -47,6 +49,7 @@ export const popularKeywordNames = [
   "개",
   "떨어지다",
   "결혼하다",
+  "가족",
 ];
 
 export const popularKeywords = popularKeywordNames

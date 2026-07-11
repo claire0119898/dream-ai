@@ -24,6 +24,7 @@ const categoryFiles = [
   "places.json",
   "money.json",
   "actions.json",
+  "objects.json",
 ];
 
 function loadCoreSymbols() {
@@ -40,7 +41,7 @@ function loadCoreSymbols() {
 // (조사 결합 문제를 피하기 위해 "상징 + 명사구" 형태로 제목을 만듭니다.)
 const situations = [
   { type: "추격", phraseNoun: "쫓기는 상황", description: "%s에게 쫓기는 느낌이었다면, 현실에서 피하고 싶은 문제나 압박감이 마음 한켠에 자리하고 있다는 신호일 수 있습니다." },
-  { type: "공격", phraseNoun: "공격받는 상황", description: "%s에게 공격받거나 물렸다면, 관계나 상황에서 느낀 날카로운 상처나 갈등이 반영되었을 수 있습니다." },
+  { type: "공격", phraseNoun: "공격받는 상황", description: "%s에게 공격받거나 물리고 할퀴었다면, 관계나 상황에서 느낀 날카로운 상처나 갈등이 반영되었을 수 있습니다." },
   { type: "극복", phraseNoun: "붙잡거나 이겨내는 상황", description: "%s를 붙잡거나 이겨냈다면, 그 상징이 뜻하는 문제를 스스로 통제하고 극복해가는 힘이 있다는 뜻일 수 있습니다." },
   { type: "종료", phraseNoun: "사라지거나 죽는 상황", description: "%s가 죽거나 사라지는 장면이었다면, 그 상징과 관련된 한 시기나 감정이 마무리되고 있다는 의미일 수 있습니다." },
   { type: "소실", phraseNoun: "잃어버리는 상황", description: "%s를 잃어버리거나 갑자기 사라졌다면, 소중하게 여기던 것을 놓칠까 봐 걱정하는 마음이 담겨 있을 수 있습니다." },
