@@ -264,6 +264,14 @@ export function analyzeDream(dream: string): DreamAnalysis {
   };
 }
 
+// 사전 기반 분석이 "충분히 구체적"인지 판단합니다. 등록된 상징(동물/사물/사람 등)을
+// 하나도 찾지 못했다면 - 특정 인물 이름이나, 사전에 없는 복합적인 상황(예: "초대받아
+// 갔는데 선물을 준비하지 못해 눈초리를 받았다")인 경우가 많아 - 사전만으로는 깊이
+// 있는 해석을 만들기 어렵습니다. 이럴 때 AI(GPT) 보완 해석을 요청하는 기준으로 씁니다.
+export function needsAiEnrichment(analysis: DreamAnalysis): boolean {
+  return analysis.keywords.length === 0;
+}
+
 export function formatDreamAnalysis(analysis: DreamAnalysis): string {
   let result = "✨ 꿈해몽 결과\n\n";
 
