@@ -73,7 +73,7 @@ export default function Home() {
 
     // 사전에 등록된 상징을 하나도 못 찾았다면(예: 사전에 없는 인물/복합 상황),
     // 더 깊은 해석을 위해 AI(GPT)에게 보완 해석을 요청합니다.
-    if (needsAiEnrichment(result)) {
+    if (needsAiEnrichment(result, dream)) {
       void requestAiInterpretation(dream, result);
     }
   }

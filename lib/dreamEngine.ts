@@ -264,12 +264,23 @@ export function analyzeDream(dream: string): DreamAnalysis {
   };
 }
 
-// 사전 기반 분석이 "충분히 구체적"인지 판단합니다. 등록된 상징(동물/사물/사람 등)을
-// 하나도 찾지 못했다면 - 특정 인물 이름이나, 사전에 없는 복합적인 상황(예: "초대받아
-// 갔는데 선물을 준비하지 못해 눈초리를 받았다")인 경우가 많아 - 사전만으로는 깊이
-// 있는 해석을 만들기 어렵습니다. 이럴 때 AI(GPT) 보완 해석을 요청하는 기준으로 씁니다.
-export function needsAiEnrichment(analysis: DreamAnalysis): boolean {
-  return analysis.keywords.length === 0;
+// 사전 기반 분석이 "충분히 구체적"인지 판단합니다. AI(GPT) 보완 해석을 요청할지 결정하는
+// 기준으로 씁니다. 두 가지 경우에 사전만으로는 부족하다고 봅니다.
+//
+// 1) 등록된 상징을 아예 하나도 못 찾은 경우 (특정 인물 이름 등)
+// 2) 키워드는 하나 걸렸지만 그게 이야기의 곁가지일 뿐인 경우. 예를 들어
+//    "유재석에게 초청받아 집에 갔는데 생일선물을 준비해오지 않아 눈초리를 받았다"는
+//    "집"이라는 키워드만 우연히 걸릴 뿐, 실제 핵심 사건(초대/선물/눈초리)은
+//    상황·감정 목록에 전혀 없기 때문에 사전 해석이 이야기의 핵심을 놓치게 됩니다.
+//    이런 "길지만 아무 상황/감정도 못 찾은" 경우도 AI 보완이 필요하다고 판단합니다.
+export function needsAiEnrichment(analysis: DreamAnalysis, dreamText: string): boolean {
+  if (analysis.keywords.length === 0) return true;
+
+  const isLikelyNarrative = dreamText.trim().length >= 40;
+  const foundNoNuance =
+    analysis.situations.length === 0 && analysis.emotions.length === 0;
+
+  return isLikelyNarrative && foundNoNuance;
 }
 
 export function formatDreamAnalysis(analysis: DreamAnalysis): string {
