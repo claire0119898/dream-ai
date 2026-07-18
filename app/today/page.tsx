@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Footer from "../../components/Footer";
+import Header from "../../components/Header";
 import { coreDreamKeywords } from "../../data/dreamDictionary";
 
 export const metadata: Metadata = {
   title: "오늘의 꿈",
   description: "오늘 하루, 하나의 꿈 상징을 살펴보세요.",
+  alternates: { canonical: "/today" },
 };
 
 function pickTodayKeyword() {
@@ -21,11 +24,12 @@ export default function TodayPage() {
   const todayLabel = new Date().toLocaleDateString("ko-KR");
 
   return (
-    <main className="min-h-screen bg-[#050b18] px-6 py-16">
-      <div className="mx-auto max-w-2xl text-center">
+    <main id="main-content" className="min-h-screen bg-[#050b18]">
+      <Header />
+      <article className="mx-auto max-w-2xl px-6 py-16 text-center">
         <p className="text-sm text-slate-500">{todayLabel}의 꿈 상징</p>
-        <h1 className="mt-3 text-5xl">{item.emoji}</h1>
-        <h2 className="mt-3 text-3xl font-bold text-white">{item.keyword}</h2>
+        <div aria-hidden="true" className="mt-3 text-5xl">{item.emoji}</div>
+        <h1 className="mt-3 text-3xl font-bold text-white">오늘의 {item.keyword} 꿈</h1>
 
         <p className="mt-6 leading-8 text-slate-300">{item.meaning}</p>
 
@@ -48,7 +52,8 @@ export default function TodayPage() {
             자세히 보기 →
           </Link>
         </div>
-      </div>
+      </article>
+      <Footer />
     </main>
   );
 }

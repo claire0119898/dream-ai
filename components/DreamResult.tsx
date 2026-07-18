@@ -1,110 +1,84 @@
-import type { DreamAnalysis } from "../types/dream";
+import type { DreamInterpretation } from "../types/dream";
 
 type DreamResultProps = {
-  analysis: DreamAnalysis | null;
+  interpretation: DreamInterpretation | null;
+  onReset: () => void;
 };
 
-export default function DreamResult({ analysis }: DreamResultProps) {
-  if (!analysis) {
-    return null;
-  }
+const cardClass = "min-w-0 rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-6";
+
+export default function DreamResult({ interpretation, onReset }: DreamResultProps) {
+  if (!interpretation) return null;
 
   return (
-    <section
-      id="result"
-      className="mx-auto mt-8 max-w-5xl space-y-4"
-    >
-      <div className="rounded-3xl border border-violet-400/30 bg-violet-500/10 p-6">
-        <h2 className="text-2xl font-bold text-white">✨ 핵심 요약</h2>
-        <p className="mt-3 leading-8 text-slate-200">{analysis.summary}</p>
-      </div>
+    <section id="result" aria-live="polite" className="mx-4 mt-8 max-w-5xl space-y-4 sm:mx-6 lg:mx-auto">
+      <header className="border-b border-white/10 pb-5">
+        <p className="text-xs font-semibold tracking-[0.18em] text-violet-300">DREAM READING</p>
+        <h2 className="mt-2 text-2xl font-semibold tracking-[-0.02em] text-white sm:text-3xl">
+          {interpretation.title}
+        </h2>
+      </header>
 
-      {analysis.keywords.length > 0 && (
-        <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-          <h3 className="text-xl font-bold text-white">발견된 상징</h3>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {analysis.keywords.map((item) => (
-              <div
-                key={item.keyword}
-                className="rounded-2xl border border-white/10 bg-[#0b1528] p-4"
-              >
-                <p className="font-bold text-white">
-                  {item.emoji} {item.keyword}
-                </p>
-                <p className="mt-1 text-sm text-slate-400">{item.meaning}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {(analysis.emotions.length > 0 || analysis.situations.length > 0) && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {analysis.emotions.length > 0 && (
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-              <h3 className="text-lg font-bold text-white">꿈속 감정</h3>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {analysis.emotions.map((emotion) => (
-                  <span
-                    key={emotion}
-                    className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 py-1 text-sm text-cyan-200"
-                  >
-                    {emotion}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {analysis.situations.length > 0 && (
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-              <h3 className="text-lg font-bold text-white">발견된 상황</h3>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {analysis.situations.map((situation) => (
-                  <span
-                    key={situation}
-                    className="rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-sm text-amber-200"
-                  >
-                    {situation}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-        <h3 className="text-xl font-bold text-white">종합 해몽</h3>
-        <p className="mt-4 whitespace-pre-wrap leading-8 text-slate-200">
-          {analysis.interpretation}
+      <div className="min-w-0 rounded-3xl border border-violet-400/30 bg-violet-500/10 p-4 sm:p-6">
+        <h3 className="text-lg font-bold text-white sm:text-xl">한눈에 보는 꿈풀이</h3>
+        <p className="mt-3 break-words text-sm leading-7 text-slate-200 sm:text-base sm:leading-8">
+          {interpretation.summary}
         </p>
       </div>
 
-      <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-        <h3 className="text-xl font-bold text-white">현실 조언</h3>
-        <p className="mt-3 leading-8 text-slate-200">{analysis.advice}</p>
-      </div>
-
-      {analysis.relatedKeywords.length > 0 && (
-        <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-          <h3 className="text-xl font-bold text-white">관련 꿈</h3>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {analysis.relatedKeywords.map((keyword) => (
-              <span
-                key={keyword}
-                className="rounded-full border border-white/10 bg-[#101d35] px-4 py-2 text-sm text-slate-200"
-              >
-                {keyword}
-              </span>
+      <div className={cardClass}>
+        <h3 className="text-lg font-bold text-white sm:text-xl">주요 상징</h3>
+        {interpretation.symbols.length ? (
+          <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2">
+            {interpretation.symbols.map((symbol) => (
+              <article key={`${symbol.name}-${symbol.meaning}`} className="min-w-0 rounded-2xl border border-white/10 bg-[#0b1528] p-4">
+                <p className="break-words font-bold text-white">{symbol.name}</p>
+                <p className="mt-1 break-words text-sm leading-6 text-slate-400">{symbol.meaning}</p>
+              </article>
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <p className="mt-3 text-sm leading-6 text-slate-400">
+            하나의 상징보다 꿈의 전체 흐름과 감정을 중심으로 살펴보는 편이 자연스럽습니다.
+          </p>
+        )}
+      </div>
 
-      <p className="text-center text-xs text-slate-500">
-        ※ 이 해몽은 참고용이며, 의학적·법적·재정적 판단의 근거로 사용하지 마세요.
-      </p>
+      <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+        <div className={cardClass}>
+          <h3 className="text-lg font-bold text-white">꿈속 감정</h3>
+          <p className="mt-3 break-words text-sm leading-7 text-slate-300">{interpretation.emotion}</p>
+        </div>
+        <div className={cardClass}>
+          <h3 className="text-lg font-bold text-white">꿈의 흐름</h3>
+          <p className="mt-3 break-words text-sm leading-7 text-slate-300">{interpretation.flow}</p>
+        </div>
+      </div>
+
+      <div className={cardClass}>
+        <h3 className="text-lg font-bold text-white sm:text-xl">종합 풀이</h3>
+        <p className="mt-4 whitespace-pre-wrap break-words text-sm leading-7 text-slate-200 sm:text-base sm:leading-8">
+          {interpretation.interpretation}
+        </p>
+      </div>
+
+      <div className={cardClass}>
+        <h3 className="text-lg font-bold text-white sm:text-xl">생활 속 참고</h3>
+        <p className="mt-3 break-words text-sm leading-7 text-slate-200 sm:text-base sm:leading-8">
+          {interpretation.guidance}
+        </p>
+      </div>
+
+      <aside className="rounded-2xl border border-white/5 bg-black/10 p-4 text-center text-xs leading-5 text-slate-500">
+        <p className="font-semibold text-slate-400">해석 유의사항</p>
+        <p className="mt-1">{interpretation.caution}</p>
+      </aside>
+
+      <div className="pt-2 text-center">
+        <button type="button" onClick={onReset} className="rounded-2xl border border-white/15 bg-white/5 px-6 py-3 text-sm font-semibold text-slate-200 transition hover:border-violet-300/40 hover:bg-violet-400/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300">
+          다른 꿈 풀이하기
+        </button>
+      </div>
     </section>
   );
 }

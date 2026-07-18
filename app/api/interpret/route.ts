@@ -1,113 +1,187 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
-import { coreDreamKeywords } from "../../../data/dreamDictionary";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+import {
+  DEFAULT_DREAM_MODEL,
+  ENRICHMENT_MAX_OUTPUT_TOKENS,
+  ENRICHMENT_TIMEOUT_MS,
+} from "../../../lib/dreamConfig";
+import { analyzeDream, needsContextEnrichment, validateDreamInput } from "../../../lib/dreamEngine";
+import {
+  createDictionaryInterpretation,
+  mergeInterpretations,
+  validateExternalInterpretation,
+} from "../../../lib/dreamInterpretation";
+import type { DreamInterpretation } from "../../../types/dream";
+import { reserveExternalAttempt } from "../../../lib/externalUsageLimiter";
 
-type InterpretRequestBody = {
-  dream?: string;
-  // 클라이언트(사전 엔진)가 이미 찾아낸 힌트가 있으면 함께 보내서 GPT가 참고하게 합니다.
-  // (완전히 새로운 상황이라 사전에 아무것도 안 걸렸다면 비어 있을 수 있습니다.)
-  hint?: {
-    emotions?: string[];
-    situations?: string[];
-  };
-};
+type InterpretRequestBody = { dream?: unknown };
+type ProviderError = Error & { status?: number; code?: string };
 
-export async function POST(request: Request) {
+const interpretationSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "title",
+    "summary",
+    "symbols",
+    "emotion",
+    "flow",
+    "interpretation",
+    "guidance",
+    "caution",
+  ],
+  properties: {
+    title: { type: "string", maxLength: 60 },
+    summary: { type: "string", maxLength: 500 },
+    symbols: {
+      type: "array",
+      maxItems: 6,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["name", "meaning"],
+        properties: {
+          name: { type: "string", maxLength: 80 },
+          meaning: { type: "string", maxLength: 400 },
+        },
+      },
+    },
+    emotion: { type: "string", maxLength: 500 },
+    flow: { type: "string", maxLength: 500 },
+    interpretation: { type: "string", maxLength: 1800 },
+    guidance: { type: "string", maxLength: 600 },
+    caution: { type: "string", maxLength: 500 },
+  },
+} as const;
+
+function json(data: unknown, status = 200) {
+  return NextResponse.json(data, {
+    status,
+    headers: {
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+}
+
+function dictionaryContext(interpretation: DreamInterpretation) {
+  return JSON.stringify({
+    summary: interpretation.summary,
+    symbols: interpretation.symbols,
+    emotion: interpretation.emotion,
+    flow: interpretation.flow,
+    guidance: interpretation.guidance,
+  });
+}
+
+function logProviderFailure(error: unknown) {
+  const providerError = error as ProviderError;
+  console.error("Dream interpretation enrichment failed", {
+    name: providerError?.name || "UnknownError",
+    status: providerError?.status,
+    code: providerError?.code,
+  });
+}
+
+async function requestContextualInterpretation(
+  dream: string,
+  dictionary: DreamInterpretation
+): Promise<DreamInterpretation | null> {
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const controller = new AbortController();
+  let timeout: ReturnType<typeof setTimeout>;
+
   try {
-    if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json(
-        { error: "AI 해몽 기능이 아직 설정되지 않았습니다. (OPENAI_API_KEY 미설정)" },
-        { status: 503 }
-      );
-    }
-
-    const body: InterpretRequestBody = await request.json();
-    const dream = body.dream;
-
-    if (!dream || typeof dream !== "string" || !dream.trim()) {
-      return NextResponse.json(
-        { error: "꿈 내용을 입력해주세요." },
-        { status: 400 }
-      );
-    }
-
-    const relatedDreams = coreDreamKeywords.filter((item) =>
-      dream.includes(item.keyword)
+    const requestPromise = client.responses.create(
+      {
+        model: process.env.OPENAI_DREAM_MODEL || DEFAULT_DREAM_MODEL,
+        instructions: `당신은 차분하고 따뜻한 한국어 꿈풀이 해설자입니다.
+꿈의 인물, 장소, 행동, 감정과 전체 흐름을 함께 고려하세요. 사전 상징을 나열하지 말고 맥락으로 연결하세요.
+미래, 사고, 죽음, 임신, 질병, 재물을 단정하거나 공포를 조장하지 마세요.
+꿈이 실제 사건을 예고한다고 표현하지 말고, 최근 경험과 감정이 반영될 수 있음을 자연스럽게 안내하세요.
+필드마다 역할을 나누고 같은 문장을 반복하지 마세요. 사용자에게 기술적인 처리 방식을 언급하지 마세요.`,
+        input: `꿈 이야기:\n${dream}\n\n사전 기반 기본 풀이:\n${dictionaryContext(dictionary)}\n\n기본 풀이를 존중하면서 꿈의 문맥에 맞게 정해진 구조의 각 항목을 완성하세요. title은 반드시 "꿈풀이"로 작성하세요.`,
+        text: {
+          format: {
+            type: "json_schema",
+            name: "dream_interpretation",
+            strict: true,
+            schema: interpretationSchema,
+          },
+        },
+        max_output_tokens: ENRICHMENT_MAX_OUTPUT_TOKENS,
+      },
+      { signal: controller.signal, maxRetries: 0 }
     );
 
-    const dictionaryText =
-      relatedDreams.length > 0
-        ? relatedDreams
-            .map(
-              (item) =>
-                `- ${item.keyword}: ${item.meaning} (좋은 의미: ${item.good} / 주의할 점: ${item.caution})`
-            )
-            .join("\n")
-        : "(사전에서 직접 일치하는 상징은 없습니다. 등장인물의 실제 정체보다, 그 사람이 주는 이미지나 상황 자체에 집중해서 해석해주세요.)";
-
-    const hintText = [
-      body.hint?.emotions?.length ? `감지된 감정: ${body.hint.emotions.join(", ")}` : null,
-      body.hint?.situations?.length ? `감지된 상황: ${body.hint.situations.join(", ")}` : null,
-    ]
-      .filter(Boolean)
-      .join("\n");
-
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: `당신은 한국어 꿈해몽 전문가입니다. 사용자가 적은 꿈 내용을 여러 겹의 상징으로 풀어서
-해석해주세요. 실존 인물이 등장하더라도 그 사람 자체를 평가하지 말고, 그 인물이 대중적으로 주는
-"이미지"(예: 친근함, 성실함, 권위 등)를 상징으로 다뤄주세요. 꿈에서 실제로 일어나지 않은 일
-(혼나지 않음, 쫓겨나지 않음 등)이 있다면 그 부재도 해석의 단서로 활용하세요.
-의학적·법적·재정적 조언처럼 단정하지 말고, 참고용 해석이라는 점을 안내하세요.
-과장하거나 확신하는 말투 대신 "~일 수 있습니다", "~로 해석되곤 합니다"처럼 부드럽게 표현하세요.`,
-        },
-        {
-          role: "user",
-          content: `사용자의 꿈:
-${dream}
-
-${hintText ? hintText + "\n\n" : ""}참고할 꿈 사전 매칭 결과:
-${dictionaryText}
-
-아래 형식으로 답변해주세요. 마크다운 제목(#, ##)은 쓰지 말고, 번호와 줄바꿈만 사용하세요.
-
-이 꿈은 "OOO" 자체보다 [핵심이 되는 상징/상황]이 중요합니다. (한 문장으로 꿈의 핵심 전제를 짚어주세요)
-
-꿈의 상징
-1. [첫 번째 사건/요소] = [그것이 상징하는 심리]
-   (짧은 설명, 필요하면 불릿 2~3개로 구체적인 해석 예시)
-2. [두 번째 사건/요소] = [그것이 상징하는 심리]
-   (짧은 설명)
-3. [세 번째 사건/요소가 있다면] = [그것이 상징하는 심리]
-   (짧은 설명)
-
-한 줄 해몽
-"[전체를 압축한 한 문장 통찰]"
-
-(꿈에서 일어나지 않은 일이 있다면, 그 점을 짚어서 마무리 코멘트를 한 단락 추가해주세요. 예: 실제로는 혼나거나 쫓겨나지 않았다는 점에서 무의식이 전하는 메시지가 무엇인지)
-`,
-        },
-      ],
-      temperature: 0.8,
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeout = setTimeout(() => {
+        controller.abort();
+        reject(new DOMException("Interpretation timed out", "AbortError"));
+      }, ENRICHMENT_TIMEOUT_MS);
     });
 
-    const result =
-      response.choices[0]?.message?.content || "해몽 결과를 생성하지 못했습니다.";
+    const response = await Promise.race([requestPromise, timeoutPromise]);
+    if (!response.output_text) return null;
 
-    return NextResponse.json({ result });
-  } catch (error) {
-    console.error(error);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(response.output_text);
+    } catch {
+      return null;
+    }
 
-    return NextResponse.json(
-      { error: "AI 해몽 중 오류가 발생했습니다." },
-      { status: 500 }
-    );
+    return validateExternalInterpretation(parsed);
+  } finally {
+    clearTimeout(timeout!);
   }
+}
+
+export async function POST(request: Request) {
+  let body: InterpretRequestBody;
+
+  try {
+    body = (await request.json()) as InterpretRequestBody;
+  } catch {
+    return json({ error: "기억나는 장면과 감정을 조금 더 자세히 적어주세요." }, 400);
+  }
+
+  const dream = typeof body.dream === "string" ? body.dream.trim() : "";
+  const validation = validateDreamInput(dream);
+
+  if (!validation.valid) {
+    return json({ error: validation.message || "기억나는 장면과 감정을 조금 더 자세히 적어주세요." }, 400);
+  }
+
+  const analysis = analyzeDream(dream);
+  const dictionary = createDictionaryInterpretation(analysis);
+
+  if (!process.env.OPENAI_API_KEY || !needsContextEnrichment(analysis, dream)) {
+    return json({ interpretation: dictionary });
+  }
+
+  // 모든 사용자·전체 한도와 동일 꿈 재요청을 외부 호출 직전에 원자적으로 확인하고,
+  // 성공 여부와 무관하게 이번 시도를 기록해 과도한 재시도를 막습니다.
+  const usageDecision = await reserveExternalAttempt(request, dream);
+
+  if (usageDecision !== "allowed") {
+    return json({
+      interpretation: dictionary,
+      notice:
+        usageDecision === "user_limited"
+          ? "오늘은 충분한 꿈 이야기를 나누었어요. 잠시 후 다시 찾아주세요."
+          : null,
+    });
+  }
+
+  const contextual = await requestContextualInterpretation(dream, dictionary).catch((error) => {
+    logProviderFailure(error);
+    return null;
+  });
+  const interpretation = contextual
+    ? mergeInterpretations(dictionary, contextual)
+    : dictionary;
+
+  return json({ interpretation });
 }

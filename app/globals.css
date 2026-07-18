@@ -1,26 +1,152 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #050b18;
+  --foreground: #e5e7eb;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  min-width: 320px;
+  font-family: var(--font-sans);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+:where(a, button, input, textarea, select, summary):focus-visible {
+  outline: 3px solid #a78bfa;
+  outline-offset: 3px;
+}
+
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 100;
+  transform: translateY(-160%);
+  border-radius: 0.75rem;
+  background: #fff;
+  padding: 0.75rem 1rem;
+  color: #111827;
+  font-weight: 700;
+  transition: transform 160ms ease;
+}
+
+.skip-link:focus { transform: translateY(0); }
+
+.content-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 640px;
+}
+
+::selection {
+  background: rgba(139, 92, 246, 0.35);
+  color: #fff;
+}
+
+.dictionary-card {
+  animation: fade-up 480ms both ease-out;
+}
+
+.dream-float {
+  animation: dream-float 5s ease-in-out infinite;
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.skeleton::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+  animation: skeleton-shimmer 1.5s infinite;
+}
+
+.info-document section {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1.5rem;
+  background: rgba(255, 255, 255, 0.035);
+  padding: 1.25rem;
+}
+
+.info-document h2 {
+  color: #fff;
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.info-document p,
+.info-document li {
+  margin-top: 0.75rem;
+  color: #94a3b8;
+  line-height: 1.85;
+}
+
+.info-document ul,
+.info-document ol {
+  padding-left: 1.25rem;
+}
+
+.info-document ul { list-style: disc; }
+.info-document ol { list-style: decimal; }
+
+.info-document a {
+  color: #c4b5fd;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.info-document strong { color: #e2e8f0; }
+
+.info-document .contact-link {
+  margin-top: 1rem;
+  display: inline-flex;
+  min-height: 3rem;
+  align-items: center;
+  border-radius: 0.75rem;
+  background: rgba(139, 92, 246, 0.14);
+  padding: 0 1rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+@media (min-width: 640px) {
+  .info-document section { padding: 1.75rem; }
+  .info-document h2 { font-size: 1.25rem; }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes dream-float {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-10px) rotate(2deg); }
+}
+
+@keyframes skeleton-shimmer {
+  100% { transform: translateX(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .dictionary-card, .dream-float, .skeleton::after { animation: none; }
 }

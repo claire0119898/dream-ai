@@ -40,3 +40,17 @@ export type DreamAnalysis = {
   advice: string;
   relatedKeywords: string[];
 };
+
+export interface DreamInterpretation {
+  title: string;
+  summary: string;
+  symbols: Array<{
+    name: string;
+    meaning: string;
+  }>;
+  emotion: string;
+  flow: string;
+  interpretation: string;
+  guidance: string;
+  caution: string;
+}

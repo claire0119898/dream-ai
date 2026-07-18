@@ -2,9 +2,9 @@ import { coreDreamKeywords } from "../data/dreamDictionary";
 import { situations } from "../data/situations";
 import { emotions } from "../data/emotions";
 import type { DreamAnalysis, DreamKeyword } from "../types/dream";
+import { MAX_DREAM_LENGTH, MIN_DREAM_LENGTH } from "./dreamConfig";
 
-export const MIN_DREAM_LENGTH = 5;
-export const MAX_DREAM_LENGTH = 2000;
+export { MAX_DREAM_LENGTH, MIN_DREAM_LENGTH } from "./dreamConfig";
 
 // actions.json의 일부 키워드는 그 자체가 이미 특정 상황을 뜻하는 행동 단어입니다.
 // (예: "도망"이라는 키워드가 매칭됨 == "회피" 상황이 이미 일어난 것) 이런 조합에서는
@@ -25,22 +25,31 @@ export type DreamValidation = {
 /** 꿈 입력값에 대한 기본적인 유효성 검사 (빈 입력, 너무 짧음, 너무 긴 입력) */
 export function validateDreamInput(dream: string): DreamValidation {
   const text = dream.trim();
+  const meaningfulCharacters = text.replace(/[\s\p{P}\p{S}]/gu, "");
 
   if (!text) {
-    return { valid: false, message: "꿈 내용을 먼저 입력해주세요." };
-  }
-
-  if (text.length < MIN_DREAM_LENGTH) {
-    return {
-      valid: false,
-      message: "꿈 내용을 조금 더 자세히 입력해주세요. (5자 이상)",
-    };
+    return { valid: false, message: "기억나는 장면과 감정을 조금 더 자세히 적어주세요." };
   }
 
   if (text.length > MAX_DREAM_LENGTH) {
     return {
       valid: false,
-      message: "꿈 내용은 2,000자 이하로 입력해주세요.",
+      message: "꿈 이야기는 1,500자 이내로 정리해 주세요.",
+    };
+  }
+
+  const repeatedPattern = /^(.{1,4})\1+$/u.test(meaningfulCharacters);
+  const characterVariety = new Set(Array.from(meaningfulCharacters)).size;
+
+  if (
+    text.length < MIN_DREAM_LENGTH ||
+    meaningfulCharacters.length < MIN_DREAM_LENGTH ||
+    repeatedPattern ||
+    characterVariety < 3
+  ) {
+    return {
+      valid: false,
+      message: "기억나는 장면과 감정을 조금 더 자세히 적어주세요.",
     };
   }
 
@@ -138,6 +147,21 @@ function detectSituations(tokens: string[], keyword: string) {
   return matched;
 }
 
+// 문장 전체를 통틀어 몇 가지 상황(추격/공격/회피 등)이 등장했는지만 먼저 파악합니다.
+// (아직 어떤 키워드를 주어로 쓸지는 정하지 않습니다 - 이후 pickSituationSubject에서 결정)
+function detectSituationTypes(tokens: string[]) {
+  const matched: { type: string; description: string }[] = [];
+
+  for (const situation of situations) {
+    const hit = situation.words.some((word) => containsAsWord(tokens, word));
+    if (hit) {
+      matched.push({ type: situation.type, description: situation.description });
+    }
+  }
+
+  return matched;
+}
+
 function detectEmotions(tokens: string[]) {
   const matched: string[] = [];
 
@@ -176,7 +200,7 @@ export function analyzeDream(dream: string): DreamAnalysis {
 
       if (detectedEmotions.length > 0) {
         interpretationParts.push(
-          `꿈속에서 느껴진 감정은 ${detectedEmotions.join(", ")}(으)로 분석됩니다.`
+          `꿈속에서 느껴진 감정은 ${detectedEmotions.join(", ")}(으)로 읽힙니다.`
         );
       }
 
@@ -206,23 +230,27 @@ export function analyzeDream(dream: string): DreamAnalysis {
 
   const keywordNames = matchedKeywords.map((item) => item.keyword).join(", ");
 
+  // 상황(추격/공격/회피 등)은 문장 전체에서 딱 한 번만 판별합니다. 예전에는 매칭된
+  // 키워드마다 각각 상황을 검사해서, 키워드가 여러 개면 "뱀에게 쫓기는 느낌이었다면"
+  // "물에게 쫓기는 느낌이었다면"처럼 사실과 다르거나 중복된 문장이 반복 생성됐습니다.
+  // 이제는 상황 하나당 문장도 하나만 만들고, 그 상황과 가장 잘 어울리는 키워드를
+  // 주어로 골라 자연스럽게 "조합"된 해석이 되도록 합니다.
   const situationSentences: string[] = [];
   const situationTypes = new Set<string>();
+  const globalSituationHits = detectSituationTypes(tokens);
 
-  for (const item of matchedKeywords) {
-    const hits = detectSituations(tokens, item.keyword);
-    for (const hit of hits) {
-      situationTypes.add(hit.type);
+  for (const hit of globalSituationHits) {
+    situationTypes.add(hit.type);
 
-      // "도망"(행동 키워드) + "회피"(상황) 조합처럼, 매칭된 키워드 자체가 이미 그
-      // 상황을 뜻하는 행동 단어인 경우 "도망으로부터 도망쳤다면"처럼 문장이
-      // 순환적으로 어색해집니다. 이런 조합은 상황 태그는 유지하되 중복 문장은 생략합니다.
-      const isRedundantForKeyword =
-        REDUNDANT_SITUATION_BY_KEYWORD[item.keyword]?.includes(hit.type);
+    // "도망"(행동 키워드) + "회피"(상황) 조합처럼, 매칭된 키워드 자체가 이미 그
+    // 상황을 뜻하는 행동 단어인 경우 "도망으로부터 도망쳤다면"처럼 문장이
+    // 순환적으로 어색해집니다. 그런 키워드는 주어 후보에서 제외합니다.
+    const subjectItem = matchedKeywords.find(
+      (item) => !REDUNDANT_SITUATION_BY_KEYWORD[item.keyword]?.includes(hit.type)
+    );
 
-      if (!isRedundantForKeyword) {
-        situationSentences.push(hit.sentence);
-      }
+    if (subjectItem) {
+      situationSentences.push(formatWithJosa(hit.description, subjectItem.keyword));
     }
   }
 
@@ -237,7 +265,7 @@ export function analyzeDream(dream: string): DreamAnalysis {
 
   if (detectedEmotions.length > 0) {
     interpretationParts.push(
-      `꿈속에서 느껴진 감정은 ${detectedEmotions.join(", ")}(으)로 분석됩니다. 상징과 감정을 함께 살펴보면 현재 마음 상태를 더 입체적으로 이해할 수 있습니다.`
+      `꿈속에서 느껴진 감정은 ${detectedEmotions.join(", ")}(으)로 읽힙니다. 상징과 감정을 함께 살펴보면 현재 마음 상태를 더 입체적으로 이해할 수 있습니다.`
     );
   }
 
@@ -264,7 +292,7 @@ export function analyzeDream(dream: string): DreamAnalysis {
   };
 }
 
-// 사전 기반 분석이 "충분히 구체적"인지 판단합니다. AI(GPT) 보완 해석을 요청할지 결정하는
+// 사전 기반 분석이 "충분히 구체적"인지 판단합니다. 문맥 보완이 필요한지 결정하는
 // 기준으로 씁니다. 두 가지 경우에 사전만으로는 부족하다고 봅니다.
 //
 // 1) 등록된 상징을 아예 하나도 못 찾은 경우 (특정 인물 이름 등)
@@ -272,19 +300,23 @@ export function analyzeDream(dream: string): DreamAnalysis {
 //    "유재석에게 초청받아 집에 갔는데 생일선물을 준비해오지 않아 눈초리를 받았다"는
 //    "집"이라는 키워드만 우연히 걸릴 뿐, 실제 핵심 사건(초대/선물/눈초리)은
 //    상황·감정 목록에 전혀 없기 때문에 사전 해석이 이야기의 핵심을 놓치게 됩니다.
-//    이런 "길지만 아무 상황/감정도 못 찾은" 경우도 AI 보완이 필요하다고 판단합니다.
-export function needsAiEnrichment(analysis: DreamAnalysis, dreamText: string): boolean {
+//    이런 "길지만 아무 상황/감정도 못 찾은" 경우도 문맥 보완이 필요하다고 판단합니다.
+export function needsContextEnrichment(analysis: DreamAnalysis, dreamText: string): boolean {
   if (analysis.keywords.length === 0) return true;
 
-  const isLikelyNarrative = dreamText.trim().length >= 40;
-  const foundNoNuance =
-    analysis.situations.length === 0 && analysis.emotions.length === 0;
+  const text = dreamText.trim();
+  const detectedClues =
+    analysis.keywords.length + analysis.situations.length + analysis.emotions.length;
+  const connectorCount = (text.match(/그런데|하지만|그러다가|갑자기|때문에|면서|했는데|했고/g) ?? [])
+    .length;
+  const isComplexNarrative = text.length >= 60 && connectorCount >= 2;
+  const isLongAndThinlyMatched = text.length >= 100 && detectedClues < 3;
 
-  return isLikelyNarrative && foundNoNuance;
+  return (isComplexNarrative && detectedClues < 4) || isLongAndThinlyMatched;
 }
 
 export function formatDreamAnalysis(analysis: DreamAnalysis): string {
-  let result = "✨ 꿈해몽 결과\n\n";
+  let result = "잠결 꿈풀이\n\n";
 
   result += `1. 핵심 요약\n${analysis.summary}\n\n`;
 

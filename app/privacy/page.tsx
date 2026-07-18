@@ -1,54 +1,23 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import InfoPageLayout from "../../components/InfoPageLayout";
 
 export const metadata: Metadata = {
   title: "개인정보처리방침",
-  description: "꿈해몽 AI의 개인정보처리방침을 확인하세요.",
+  description: "꿈 내용 저장 여부, 쿠키와 광고, 서비스 이용 정보 처리 등 잠결의 개인정보 처리 기준을 안내합니다.",
+  alternates: { canonical: "/privacy" },
 };
 
 export default function PrivacyPage() {
   return (
-    <main className="min-h-screen bg-[#050b18] px-6 py-16">
-      <div className="mx-auto max-w-3xl text-slate-300">
-        <h1 className="text-3xl font-bold text-white">개인정보처리방침</h1>
-        <p className="mt-2 text-sm text-slate-500">최종 수정일: 2026년 7월 11일</p>
-
-        <div className="mt-8 space-y-6 leading-8">
-          <section>
-            <h2 className="text-xl font-bold text-white">1. 수집하는 정보</h2>
-            <p className="mt-2">
-              꿈해몽 AI는 별도의 회원가입 없이 이용할 수 있는 서비스입니다. 사용자가 입력한 꿈
-              내용은 해몽 결과를 생성하는 데에만 사용되며, 별도의 데이터베이스에 저장하지
-              않습니다.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-xl font-bold text-white">2. 쿠키 및 광고</h2>
-            <p className="mt-2">
-              서비스 운영을 위해 방문 통계 확인용 쿠키(예: Google Analytics)와 광고 노출용
-              쿠키(예: Google AdSense)를 사용할 수 있습니다. 광고 게재 사업자는 이용자의 관심사에
-              기반한 광고를 제공하기 위해 방문 기록을 활용할 수 있으며, 이용자는 브라우저
-              설정에서 쿠키 저장을 거부할 수 있습니다.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-xl font-bold text-white">3. 해몽 결과의 성격</h2>
-            <p className="mt-2">
-              본 서비스가 제공하는 꿈해몽 결과는 통계적·전통적 상징 해석에 기반한 참고용
-              콘텐츠이며, 의학적·법적·재정적 조언이 아닙니다. 중요한 의사결정은 관련 전문가와
-              상담하시기 바랍니다.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-xl font-bold text-white">4. 문의</h2>
-            <p className="mt-2">
-              개인정보와 관련해 문의사항이 있으시면 서비스 내 안내된 연락처로 문의해주세요.
-            </p>
-          </section>
-        </div>
-      </div>
-    </main>
+    <InfoPageLayout eyebrow="PRIVACY POLICY" title="개인정보처리방침" description="잠결은 꿈 내용을 최소한으로 처리하고, 서비스 제공에 필요하지 않은 개인정보를 수집하지 않는 것을 원칙으로 합니다." updatedAt="2026년 7월 18일">
+      <section><h2>1. 수집하는 정보</h2><p>잠결은 회원가입 없이 이용할 수 있습니다. 꿈풀이 요청 시 사용자가 입력한 꿈 내용과 요청 제한 및 보안에 필요한 접속 정보가 일시적으로 처리될 수 있습니다. 접속 주소는 원문이 아닌 식별이 어려운 형태로 변환하여 사용량 제한에 이용합니다.</p></section>
+      <section><h2>2. 꿈 내용의 처리와 저장</h2><p><strong>사용자가 입력한 꿈 내용은 잠결의 데이터베이스나 분석 기록에 저장하지 않습니다.</strong> 꿈 내용은 해당 요청의 결과를 준비하는 동안에만 처리되며, 서비스 운영 로그에도 꿈 원문 전체를 남기지 않습니다. 결과 준비에 필요한 외부 처리 서비스로 내용이 일시 전달될 수 있으나 서비스 제공 목적 외로 사용하지 않습니다.</p></section>
+      <section><h2>3. 쿠키와 기기 저장 정보</h2><p>꿈 사전의 최근 검색어는 사용자의 브라우저 저장 공간에만 보관되며 잠결 서버로 전송하거나 계정과 연결하지 않습니다. 브라우저 설정에서 저장 정보를 언제든 삭제할 수 있습니다.</p></section>
+      <section><h2>4. 방문 통계</h2><p>운영 설정에 따라 서비스 품질과 이용 흐름을 파악하기 위한 방문 통계 도구가 사용될 수 있습니다. 이 경우 방문한 페이지, 접속 시각, 브라우저·기기 유형, 유입 경로와 성능 지표 등이 처리될 수 있으며, 사용자가 입력한 꿈 내용은 방문 통계로 전송하지 않습니다. 관련 쿠키는 브라우저 설정에서 제한하거나 삭제할 수 있습니다.</p></section>
+      <section><h2>5. 광고 안내</h2><p>현재 페이지에는 광고 배치를 위한 빈 자리만 마련되어 있으며 광고 추적 코드는 포함하지 않습니다. 향후 광고가 적용되면 광고 사업자가 쿠키나 유사 기술을 사용할 수 있습니다. 적용 전 관련 고지와 선택 방법을 이 방침에 안내합니다.</p></section>
+      <section><h2>6. 보유 기간과 파기</h2><p>꿈 내용은 별도로 저장하지 않으므로 요청 처리가 끝난 뒤 보유하지 않습니다. 보안과 사용량 제한을 위해 변환된 접속 식별 정보가 필요한 기간 동안 유지될 수 있으며, 목적이 끝나면 자동 만료됩니다. 방문 통계의 보유 기간은 운영 도구의 설정과 관련 법령에 따릅니다.</p></section>
+      <section><h2>7. 이용자의 선택과 문의</h2><p>최근 검색어는 브라우저에서 직접 삭제할 수 있습니다. 쿠키 제한과 개인정보 처리에 관한 질문 또는 권리 요청은 <Link href="/contact">문의하기</Link> 페이지를 이용해주세요.</p></section>
+    </InfoPageLayout>
   );
 }

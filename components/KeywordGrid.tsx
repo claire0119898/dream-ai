@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { popularKeywords } from "../data/dreamDictionary";
+import { popularKeywords } from "../data/coreDreamKeywords";
 
 type KeywordGridProps = {
   onSelectKeyword: (keyword: string) => void;

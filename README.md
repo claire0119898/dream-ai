@@ -1,36 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 잠결 (Jamgyeol)
 
-## Getting Started
+기억에 남은 꿈의 상징과 의미를 차분하게 풀어보는 꿈해몽·꿈풀이 웹사이트입니다.
 
-First, run the development server:
+## 주요 기능
+
+- 꿈 이야기에서 상징, 동의어, 감정, 상황 찾기
+- 사전 정보를 조합한 꿈풀이
+- 복잡한 꿈의 문맥을 보완한 종합 풀이
+- 동물, 인물, 장소, 행동별 꿈 사전
+- 외부 서비스 장애 시에도 기본 꿈풀이 제공
+- 모바일과 데스크톱 반응형 화면
+
+## 로컬 실행
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+브라우저에서 [http://localhost:3000](http://localhost:3000)을 열어 확인할 수 있습니다.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+환경변수는 `.env.example`을 참고해 `.env.local`에 설정합니다. 비밀 키는 서버에서만 사용하며 브라우저 코드에 포함하지 않습니다.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+운영 환경에서는 `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `RATE_LIMIT_HASH_SALT`를 설정해야 외부 문맥 보완 기능이 활성화됩니다. 저장소가 준비되지 않았거나 일일 한도에 도달하면 비용이 발생하지 않도록 외부 호출을 중단하고 기본 꿈풀이를 제공합니다. 로컬 개발 환경에서는 별도 Redis 없이 메모리 기반 제한이 적용됩니다. 모든 사용량 날짜 구분은 UTC 기준입니다.
 
-## Learn More
+## 배포 환경 설정
 
-To learn more about Next.js, take a look at the following resources:
+- `SITE_URL`: 실제 공개 주소. canonical, sitemap, 공유 이미지 주소의 기준이 됩니다. Vercel에서는 값이 없을 때 운영 도메인을 자동 감지하지만, 맞춤 도메인을 연결했다면 명시적으로 설정하는 편이 안전합니다.
+- `CONTACT_EMAIL`: 문의 페이지에 표시할 운영 이메일입니다.
+- `NEXT_PUBLIC_GA_MEASUREMENT_ID`: 선택 사항인 방문 통계 측정 ID입니다. 비워두면 관련 스크립트를 불러오지 않습니다.
+- `GOOGLE_SITE_VERIFICATION`: Search Console HTML 태그 인증에서 받은 `content` 값입니다.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+배포 후 `/robots.txt`, `/sitemap.xml`, 존재하지 않는 주소의 404 응답을 확인하고, Search Console에 사이트맵을 제출합니다. 방문 통계를 활성화했다면 실시간 보고서에서 페이지 이동이 기록되는지 확인하고 개인정보처리방침의 안내와 실제 설정이 일치하는지 점검합니다.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 검증
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run lint
+npm run build
+```
