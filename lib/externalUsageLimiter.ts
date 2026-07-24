@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import { EXTERNAL_USAGE_LIMITS } from "./dreamConfig";
+import { validateCachedInterpretation } from "./dreamInterpretation";
+import type { DreamInterpretation } from "../types/dream";
 
 export type UsageDecision =
   | "allowed"
@@ -15,9 +17,12 @@ type ReserveInput = {
 };
 
 type MemoryEntry = { count: number; expiresAt: number };
+type MemoryCacheEntry = { interpretation: DreamInterpretation; expiresAt: number };
 
 export interface ExternalUsageStore {
   reserve(input: ReserveInput): Promise<UsageDecision>;
+  getCached(dreamHash: string): Promise<unknown | null>;
+  setCached(dreamHash: string, interpretation: DreamInterpretation): Promise<void>;
 }
 
 function utcBuckets(now: Date) {
@@ -43,15 +48,20 @@ function limiterKeys(input: ReserveInput) {
   };
 }
 
+function interpretationCacheKey(dreamHash: string) {
+  return `jamgyeol:interpretation:v2:${dreamHash}`;
+}
+
 export class MemoryExternalUsageStore implements ExternalUsageStore {
   private counters = new Map<string, MemoryEntry>();
   private duplicates = new Map<string, number>();
+  private interpretations = new Map<string, MemoryCacheEntry>();
 
   async reserve(input: ReserveInput): Promise<UsageDecision> {
     const now = (input.now ?? new Date()).getTime();
     const keys = limiterKeys(input);
 
-    if (this.counters.size + this.duplicates.size > 1000) this.prune(now);
+    if (this.counters.size + this.duplicates.size + this.interpretations.size > 1000) this.prune(now);
 
     const minute = this.readCounter(keys.minute, now);
     const hour = this.readCounter(keys.hour, now);
@@ -76,6 +86,23 @@ export class MemoryExternalUsageStore implements ExternalUsageStore {
     return "allowed";
   }
 
+  async getCached(dreamHash: string): Promise<unknown | null> {
+    const now = Date.now();
+    const entry = this.interpretations.get(dreamHash);
+    if (!entry || entry.expiresAt <= now) {
+      this.interpretations.delete(dreamHash);
+      return null;
+    }
+    return entry.interpretation;
+  }
+
+  async setCached(dreamHash: string, interpretation: DreamInterpretation) {
+    this.interpretations.set(dreamHash, {
+      interpretation,
+      expiresAt: Date.now() + EXTERNAL_USAGE_LIMITS.duplicateSeconds * 1000,
+    });
+  }
+
   private readCounter(key: string, now: number) {
     const entry = this.counters.get(key);
     if (!entry || entry.expiresAt <= now) {
@@ -96,6 +123,9 @@ export class MemoryExternalUsageStore implements ExternalUsageStore {
     }
     for (const [key, expiresAt] of this.duplicates) {
       if (expiresAt <= now) this.duplicates.delete(key);
+    }
+    for (const [key, entry] of this.interpretations) {
+      if (entry.expiresAt <= now) this.interpretations.delete(key);
     }
   }
 }
@@ -137,15 +167,24 @@ class UpstashExternalUsageStore implements ExternalUsageStore {
     this.token = token;
   }
 
-  async reserve(input: ReserveInput): Promise<UsageDecision> {
-    const keys = limiterKeys(input);
+  private async command(command: unknown[]) {
     const response = await fetch(this.url, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify([
+      body: JSON.stringify(command),
+      signal: AbortSignal.timeout(3_000),
+      cache: "no-store",
+    });
+    if (!response.ok) throw new Error(`Usage store request failed (${response.status})`);
+    return (await response.json()) as { result?: unknown; error?: unknown };
+  }
+
+  async reserve(input: ReserveInput): Promise<UsageDecision> {
+    const keys = limiterKeys(input);
+    const data = await this.command([
         "EVAL",
         RESERVE_SCRIPT,
         "5",
@@ -159,13 +198,7 @@ class UpstashExternalUsageStore implements ExternalUsageStore {
         String(EXTERNAL_USAGE_LIMITS.day),
         String(EXTERNAL_USAGE_LIMITS.globalDay),
         String(EXTERNAL_USAGE_LIMITS.duplicateSeconds),
-      ]),
-      signal: AbortSignal.timeout(3_000),
-      cache: "no-store",
-    });
-
-    if (!response.ok) throw new Error(`Usage store request failed (${response.status})`);
-    const data = (await response.json()) as { result?: unknown; error?: unknown };
+      ]);
     if (typeof data.result !== "string") throw new Error("Usage store returned an invalid result");
     if (
       data.result !== "allowed" &&
@@ -176,6 +209,27 @@ class UpstashExternalUsageStore implements ExternalUsageStore {
       throw new Error("Usage store returned an unknown decision");
     }
     return data.result;
+  }
+
+  async getCached(dreamHash: string): Promise<unknown | null> {
+    const data = await this.command(["GET", interpretationCacheKey(dreamHash)]);
+    if (data.result === null || data.result === undefined) return null;
+    if (typeof data.result !== "string") throw new Error("Usage store returned an invalid cache entry");
+    try {
+      return JSON.parse(data.result) as unknown;
+    } catch {
+      return null;
+    }
+  }
+
+  async setCached(dreamHash: string, interpretation: DreamInterpretation) {
+    await this.command([
+      "SET",
+      interpretationCacheKey(dreamHash),
+      JSON.stringify(interpretation),
+      "EX",
+      String(EXTERNAL_USAGE_LIMITS.duplicateSeconds),
+    ]);
   }
 }
 
@@ -193,6 +247,10 @@ function usageStore(): ExternalUsageStore | null {
 export function hashPrivateValue(value: string) {
   const salt = process.env.RATE_LIMIT_HASH_SALT || "jamgyeol-local-development";
   return createHash("sha256").update(`${salt}:${value}`).digest("hex");
+}
+
+function normalizedDreamFingerprint(dream: string) {
+  return dream.normalize("NFKC").replace(/\s+/g, " ").trim().toLocaleLowerCase("ko-KR");
 }
 
 export function trustedClientAddress(request: Request) {
@@ -215,11 +273,28 @@ export async function reserveExternalAttempt(
   try {
     return await store.reserve({
       identityHash: hashPrivateValue(trustedClientAddress(request)),
-      dreamHash: hashPrivateValue(dream),
+      dreamHash: hashPrivateValue(normalizedDreamFingerprint(dream)),
     });
-  } catch (error) {
-    const safeError = error as Error;
-    console.error("External usage store failed", { name: safeError.name });
+  } catch {
     return "store_unavailable";
   }
+}
+
+export async function getCachedInterpretation(dream: string): Promise<DreamInterpretation | null> {
+  const store = usageStore();
+  if (!store) return null;
+  try {
+    const cached = await store.getCached(hashPrivateValue(normalizedDreamFingerprint(dream)));
+    return validateCachedInterpretation(cached);
+  } catch {
+    return null;
+  }
+}
+
+export async function cacheInterpretation(dream: string, interpretation: DreamInterpretation) {
+  const store = usageStore();
+  if (!store) return;
+  try {
+    await store.setCached(hashPrivateValue(normalizedDreamFingerprint(dream)), interpretation);
+  } catch {}
 }

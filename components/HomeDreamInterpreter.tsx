@@ -6,6 +6,8 @@ import AdPlaceholder from "./AdPlaceholder";
 import DreamInput from "./DreamInput";
 import DreamResult from "./DreamResult";
 
+const CLIENT_REQUEST_TIMEOUT_MS = 25_000;
+
 export default function HomeDreamInterpreter() {
   const [dream, setDream] = useState("");
   const [interpretation, setInterpretation] = useState<DreamInterpretation | null>(null);
@@ -24,7 +26,7 @@ export default function HomeDreamInterpreter() {
     const timeout = window.setTimeout(() => {
       timedOut = true;
       controller.abort();
-    }, 17_000);
+    }, CLIENT_REQUEST_TIMEOUT_MS);
 
     setLoading(true);
     setError("");

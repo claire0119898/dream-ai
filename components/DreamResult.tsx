@@ -47,11 +47,11 @@ export default function DreamResult({ interpretation, onReset }: DreamResultProp
       <div className="grid min-w-0 gap-4 sm:grid-cols-2">
         <div className={cardClass}>
           <h3 className="text-lg font-bold text-white">꿈속 감정</h3>
-          <p className="mt-3 break-words text-sm leading-7 text-slate-300">{interpretation.emotion}</p>
+          <p className="mt-3 whitespace-pre-line break-words text-sm leading-7 text-slate-300">{interpretation.emotion}</p>
         </div>
         <div className={cardClass}>
           <h3 className="text-lg font-bold text-white">꿈의 흐름</h3>
-          <p className="mt-3 break-words text-sm leading-7 text-slate-300">{interpretation.flow}</p>
+          <p className="mt-3 whitespace-pre-line break-words text-sm leading-7 text-slate-300">{interpretation.flow}</p>
         </div>
       </div>
 
@@ -64,7 +64,7 @@ export default function DreamResult({ interpretation, onReset }: DreamResultProp
 
       <div className={cardClass}>
         <h3 className="text-lg font-bold text-white sm:text-xl">생활 속 참고</h3>
-        <p className="mt-3 break-words text-sm leading-7 text-slate-200 sm:text-base sm:leading-8">
+        <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-7 text-slate-200 sm:text-base sm:leading-8">
           {interpretation.guidance}
         </p>
       </div>

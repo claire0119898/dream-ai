@@ -54,3 +54,26 @@ export interface DreamInterpretation {
   guidance: string;
   caution: string;
 }
+
+export interface ContextualDreamInterpretation {
+  summary: string;
+  symbols: Array<{
+    name: string;
+    evidence: string;
+    contextualMeaning: string;
+  }>;
+  emotionAnalysis: {
+    expressedEmotion: string;
+    contrast: string;
+    interpretation: string;
+  };
+  flowAnalysis: {
+    beginning: string;
+    change: string;
+    ending: string;
+    meaning: string;
+  };
+  integratedInterpretation: string;
+  lifeGuidance: string[];
+  caution: string;
+}
