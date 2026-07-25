@@ -84,18 +84,16 @@ for (const testCase of selectedCases) {
   }
 
   const combined = [
-    interpretation.coreMeaning,
-    interpretation.overallDirection,
+    interpretation.coreConclusion,
+    interpretation.relationshipMeaning,
+    interpretation.objectMeaning,
     interpretation.integratedInterpretation,
     ...interpretation.keyScenes.flatMap((scene) => [
       scene.title,
-      scene.evidence,
-      scene.generalMeaning,
-      scene.specificMeaning,
-      scene.connection,
+      scene.meaning,
     ]),
     ...interpretation.realLifeConnections,
-    interpretation.reflectionQuestion,
+    ...interpretation.reflectionQuestions,
   ].join(" ");
   const matched = testCase.expected.filter((term) => combined.includes(term));
   const matchedConcepts = testCase.concepts.filter((options) =>
@@ -105,7 +103,9 @@ for (const testCase of selectedCases) {
     .split(/\n\s*\n/)
     .map((paragraph) => paragraph.trim())
     .filter(Boolean).length;
-  const reflectionQuestionCount = interpretation.reflectionQuestion.trim().endsWith("?") ? 1 : 0;
+  const reflectionQuestionCount = interpretation.reflectionQuestions.filter((question) =>
+    question.trim().endsWith("?")
+  ).length;
   const possibilityCount = (
     `${interpretation.integratedInterpretation} ${interpretation.realLifeConnections.join(" ")}`.match(/수 있습니다|수도 있습니다|연결해볼 수 있습니다|가능성/g) ?? []
   ).length;
@@ -134,9 +134,9 @@ for (const testCase of selectedCases) {
       sceneMatches: `${matched.length}/${testCase.expected.length}`,
       missingScenes: testCase.expected.filter((term) => !matched.includes(term)),
       conceptMatches: `${matchedConcepts.length}/${testCase.concepts.length}`,
-      coreMeaningLength: interpretation.coreMeaning.length,
+      coreMeaningLength: interpretation.coreConclusion.length,
       keySceneCount: interpretation.keyScenes.length,
-      sceneSpecificLengths: interpretation.keyScenes.map((scene) => scene.specificMeaning.length),
+      sceneSpecificLengths: interpretation.keyScenes.map((scene) => scene.meaning.length),
       interpretationLength: interpretation.integratedInterpretation.length,
       paragraphCount,
       reflectionQuestionCount,

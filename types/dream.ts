@@ -43,35 +43,31 @@ export type DreamAnalysis = {
 
 export interface DreamInterpretation {
   title: string;
-  notice: string;
-  coreMeaning: string;
+  coreConclusion: string;
+  dreamType: "single_scene" | "multi_scene";
   keyScenes: Array<{
     title: string;
-    evidence: string;
-    generalMeaning: string;
-    specificMeaning: string;
-    connection: string;
+    meaning: string;
   }>;
-  overallDirection: string;
+  relationshipMeaning: string;
+  objectMeaning: string;
   integratedInterpretation: string;
   realLifeConnections: string[];
-  reflectionQuestion: string;
+  reflectionQuestions: string[];
   caution: string;
 }
 
 export interface ContextualDreamInterpretation {
-  notice: string;
-  coreMeaning: string;
+  coreConclusion: string;
+  dreamType: "single_scene" | "multi_scene";
   keyScenes: Array<{
     title: string;
-    evidence: string;
-    generalMeaning: string;
-    specificMeaning: string;
-    connection: string;
+    meaning: string;
   }>;
-  overallDirection: string;
+  relationshipMeaning: string;
+  objectMeaning: string;
   integratedInterpretation: string;
   realLifeConnections: string[];
-  reflectionQuestion: string;
+  reflectionQuestions: string[];
   caution: string;
 }

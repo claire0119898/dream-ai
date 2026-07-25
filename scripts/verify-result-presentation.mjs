@@ -1,5 +1,8 @@
 import { buildDreamRequestContext } from "../lib/dreamContext.ts";
-import { createDictionaryInterpretation } from "../lib/dreamInterpretation.ts";
+import {
+  createDictionaryInterpretation,
+  validateContextualInterpretation,
+} from "../lib/dreamInterpretation.ts";
 import {
   buildDreamResultPresentation,
   countVisibleResultCharacters,
@@ -16,7 +19,9 @@ const emptyAnalysis = {
 };
 
 const forbidden =
-  /\b(?:AI|GPT|OpenAI|API|prompt|token|model)\b|인공지능|프롬프트|내포|시사|부각|상징화|심층적\s*의미|최근\s*대화를\s*보면|앱\s*출시|개인\s*사업/iu;
+  /\b(?:AI|GPT|OpenAI|API|prompt|token|model)\b|인공지능|프롬프트|내포|시사|부각|상징화|심층적\s*의미|최근\s*대화를\s*보면|앱\s*출시|개인\s*사업|전달이\s*한\s*관계에서|한\s*인물의\s*행동|꿈속의\s*인물과\s*상대|처음의\s*관계|중심\s*사건이\s*한\s*장면/iu;
+const deterministicFuture =
+  /재물이\s*들어옵니다|임신하게\s*됩니다|사고가\s*생깁니다|반드시\s*성공|곧\s*.{0,15}생깁니다|길몽입니다/iu;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -36,113 +41,128 @@ function normalizedSentences(values) {
 
 const cases = [
   {
-    name: "움직이는 거대한 건물",
-    dream:
-      "가족들과 잔디밭에 누워 하늘을 보고 있었는데, 하늘에 닿을 만큼 높은 건물이 보였습니다. 그런데 그 건물이 갑자기 두 발로 일어나 우리 앞을 천천히 걸어 지나갔습니다. 너무 크고 선명해서 계속 바라봤습니다.",
-    expected: ["높은 건물", "가족", "누워", "두 발", "걸어", "바라"],
-  },
-  {
-    name: "가족 사이의 은팔찌 전달",
+    name: "친정아버지의 은팔찌",
     dream:
       "꿈에서 친정아빠가 남편한테 살림에 보태라고 차고 계시던 은팔찌를 주셨어요.",
-    expected: ["친정아버지", "남편", "은팔찌", "살림", "책임", "애정"],
+    type: "single_scene",
+    expected: ["친정아버지", "남편", "은팔찌", "차고", "살림", "도움", "애정", "책임"],
+    forbiddenForCase: /한\s*인물|상대|처음|변화|마지막|이후\s*흐름/u,
   },
   {
-    name: "시험 종료 뒤의 해방",
-    dream:
-      "시험장에 늦게 도착했는데 시험지는 이미 제출되어 있었습니다. 그런데 불안하지 않았고 오히려 홀가분했습니다. 밖으로 나오자 비가 그치고 햇빛이 비쳤습니다.",
-    expected: ["늦", "시험", "불안하지", "홀가분", "비가 그치", "햇빛"],
+    name: "할머니의 따뜻한 밥그릇",
+    dream: "돌아가신 할머니가 제 손에 따뜻한 밥그릇을 쥐여주셨어요.",
+    type: "single_scene",
+    expected: ["돌아가신 할머니", "손", "따뜻한 밥그릇", "쥐여", "돌봄", "위로", "가족"],
+    forbiddenForCase: /죽음.{0,12}(?:예고|발생)|처음의\s*관계|이후\s*흐름/u,
   },
   {
-    name: "문을 열어준 뒤의 변화",
+    name: "문을 고치는 남편과 불을 밝히는 어머니",
     dream:
-      "고양이가 창문 밖에서 계속 울고 있었는데 문을 열어주자 새로 변해 날아갔습니다. 처음에는 걱정했지만 마지막에는 마음이 놓였습니다.",
-    expected: ["고양이", "창문", "문을 열", "새로 변", "날아", "걱정"],
+      "남편이 낡은 집의 문을 고치고 있었고 친정엄마가 옆에서 불을 밝혀주고 있었어요.",
+    type: "multi_scene",
+    expected: ["남편", "문을", "고치", "친정어머니", "불을", "밝", "가정", "지원"],
+  },
+  {
+    name: "시험 종료 뒤의 홀가분함",
+    dream:
+      "시험장에 늦게 도착했지만 시험은 이미 끝났고, 불안하지 않고 홀가분했습니다.",
+    type: "multi_scene",
+    expected: ["시험", "늦", "끝", "불안하지", "홀가분", "압박", "해방"],
   },
 ];
 
 const summaries = cases.map((testCase) => {
-  const context = buildDreamRequestContext(
-    testCase.dream,
-    emptyAnalysis,
-    8,
-  );
+  const context = buildDreamRequestContext(testCase.dream, emptyAnalysis, 8);
   const interpretation = createDictionaryInterpretation(emptyAnalysis, context);
+  const contextualCandidate = Object.fromEntries(
+    Object.entries(interpretation).filter(([key]) => key !== "title"),
+  );
+  assert(
+    validateContextualInterpretation(
+      contextualCandidate,
+      testCase.dream,
+      context,
+    ).ok,
+    `${testCase.name}: 구체 명사를 보존한 구조화 결과가 품질 검사를 통과해야 합니다.`,
+  );
   const result = buildDreamResultPresentation(interpretation);
   const visibleText = [
-    result.coreMeaning,
-    ...result.keyScenes.flatMap((scene) => [
-      scene.title,
-      scene.evidence,
-      scene.generalMeaning,
-      scene.specificMeaning,
-      scene.connection,
-    ]),
-    result.overallDirection,
+    result.coreConclusion,
+    ...result.keyScenes.flatMap((scene) => [scene.title, scene.meaning]),
+    result.relationshipMeaning,
+    result.objectMeaning,
     ...result.interpretationParagraphs,
     ...result.realLifeConnections,
-    result.reflectionQuestion,
+    ...result.reflectionQuestions,
     result.caution,
   ].join(" ");
 
   assert(
-    result.coreMeaning.length >= 120 && result.coreMeaning.length <= 220,
-    `${testCase.name}: 핵심 의미는 120~220자여야 합니다.`,
+    result.coreConclusion.length >= 100 && result.coreConclusion.length <= 180,
+    `${testCase.name}: 결론은 100~180자여야 합니다.`,
   );
   assert(
-    result.keyScenes.length >= 2 && result.keyScenes.length <= 4,
-    `${testCase.name}: 핵심 장면은 2~4개여야 합니다.`,
+    result.coreConclusion.startsWith("이 꿈"),
+    `${testCase.name}: 첫 문장에서 결론을 말해야 합니다.`,
   );
   assert(
-    result.keyScenes.every((scene) => scene.specificMeaning.length >= 100),
-    `${testCase.name}: 각 장면은 이 꿈에서 특별한 이유를 100자 이상 설명해야 합니다.`,
+    result.dreamType === testCase.type,
+    `${testCase.name}: 단일·다중 장면 분기가 잘못됐습니다.`,
   );
   assert(
-    interpretation.integratedInterpretation.length >= 500 &&
-      interpretation.integratedInterpretation.length <= 850,
-    `${testCase.name}: 종합 풀이는 500~850자여야 합니다.`,
+    result.keyScenes.length >= 2 &&
+      result.keyScenes.length <= (testCase.type === "single_scene" ? 3 : 4),
+    `${testCase.name}: 핵심 장면 수가 기준과 다릅니다.`,
   );
   assert(
-    result.interpretationParagraphs.length >= 3 &&
-      result.interpretationParagraphs.length <= 4,
-    `${testCase.name}: 종합 풀이는 3~4문단이어야 합니다.`,
+    interpretation.integratedInterpretation.length >= 350 &&
+      interpretation.integratedInterpretation.length <= 550,
+    `${testCase.name}: 종합 풀이는 350~550자여야 합니다.`,
   );
   assert(
-    result.realLifeConnections.length >= 2 &&
-      result.realLifeConnections.length <= 3,
-    `${testCase.name}: 현실 연결은 2~3개여야 합니다.`,
+    result.interpretationParagraphs.length === 3,
+    `${testCase.name}: 종합 풀이는 3문단이어야 합니다.`,
   );
   assert(
-    result.reflectionQuestion.endsWith("?"),
-    `${testCase.name}: 생각해볼 질문은 하나의 질문이어야 합니다.`,
+    result.realLifeConnections.length >= 1 &&
+      result.realLifeConnections.length <= 2,
+    `${testCase.name}: 현실 연결은 1~2개여야 합니다.`,
+  );
+  assert(
+    result.reflectionQuestions.length >= 1 &&
+      result.reflectionQuestions.length <= 2 &&
+      result.reflectionQuestions.every((question) => question.endsWith("?")),
+    `${testCase.name}: 구체적인 질문은 1~2개여야 합니다.`,
   );
   assert(
     testCase.expected.every((term) => visibleText.includes(term)),
-    `${testCase.name}: 필수 장면 또는 의미가 빠졌습니다.`,
+    `${testCase.name}: 필수 인물·물건·행동·의미가 빠졌습니다.`,
   );
   assert(
-    !forbidden.test(visibleText),
-    `${testCase.name}: 기술 용어, 어려운 보고서 문체 또는 추측한 개인정보가 포함됐습니다.`,
+    !forbidden.test(visibleText) &&
+      !deterministicFuture.test(visibleText) &&
+      !(testCase.forbiddenForCase?.test(visibleText)),
+    `${testCase.name}: 추상 문장, 가짜 흐름 또는 미래 단정이 포함됐습니다.`,
   );
-  const sentences = normalizedSentences([
-    result.coreMeaning,
-    ...result.keyScenes.flatMap((scene) => [
-      scene.generalMeaning,
-      scene.specificMeaning,
-      scene.connection,
-    ]),
+  const allSentences = normalizedSentences([
+    result.coreConclusion,
+    ...result.keyScenes.map((scene) => scene.meaning),
+    result.relationshipMeaning,
+    result.objectMeaning,
     ...result.interpretationParagraphs,
     ...result.realLifeConnections,
-    result.reflectionQuestion,
+    ...result.reflectionQuestions,
   ]);
   assert(
-    new Set(sentences).size === sentences.length,
+    new Set(allSentences).size === allSentences.length,
     `${testCase.name}: 동일 문장이 여러 영역에 반복됩니다.`,
   );
+
   return {
     name: testCase.name,
+    dreamType: result.dreamType,
     keyScenes: result.keyScenes.length,
-    coreLength: result.coreMeaning.length,
+    coreLength: result.coreConclusion.length,
     integratedLength: interpretation.integratedInterpretation.length,
     visibleLength: countVisibleResultCharacters(result),
     paragraphs: result.interpretationParagraphs.length,
@@ -154,13 +174,34 @@ const averageVisibleLength = Math.round(
     summaries.length,
 );
 
+const abstractDream = cases[0].dream;
+const abstractContext = buildDreamRequestContext(
+  abstractDream,
+  emptyAnalysis,
+  8,
+);
+const abstractCandidate = Object.fromEntries(
+  Object.entries(
+    createDictionaryInterpretation(emptyAnalysis, abstractContext),
+  ).filter(([key]) => key !== "title"),
+);
+const rejectedAbstract = validateContextualInterpretation(
+  {
+    ...abstractCandidate,
+    relationshipMeaning:
+      "한 인물의 행동이 장면의 분위기와 이후 흐름을 이끌고 있습니다. 전달이 한 관계에서 다른 관계로 이어지는 모습을 담고 있습니다.",
+  },
+  abstractDream,
+  abstractContext,
+);
+assert(
+  !rejectedAbstract.ok && rejectedAbstract.code === "quality_rejected",
+  "구체 명사를 숨기는 추상 결과는 품질 실패로 처리해야 합니다.",
+);
+
 console.log(
   JSON.stringify(
-    {
-      cases: summaries,
-      averageVisibleLength,
-      result: "passed",
-    },
+    { cases: summaries, averageVisibleLength, result: "passed" },
     null,
     2,
   ),

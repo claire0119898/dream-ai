@@ -1,13 +1,14 @@
 import type { DreamInterpretation } from "../types/dream";
 
 export type DreamResultPresentation = {
-  notice: string;
-  coreMeaning: string;
+  coreConclusion: string;
+  dreamType: DreamInterpretation["dreamType"];
   keyScenes: DreamInterpretation["keyScenes"];
-  overallDirection: string;
+  relationshipMeaning: string;
+  objectMeaning: string;
   interpretationParagraphs: string[];
   realLifeConnections: string[];
-  reflectionQuestion: string;
+  reflectionQuestions: string[];
   caution: string;
 };
 
@@ -25,10 +26,10 @@ function compact(value: string, maxLength: number) {
     : `${shortened.trimEnd()}…`;
 }
 
-function unique<T>(values: T[], key: (value: T) => string) {
+function unique(values: string[]) {
   const seen = new Set<string>();
   return values.filter((value) => {
-    const normalized = key(value)
+    const normalized = value
       .normalize("NFKC")
       .replace(/\s+/gu, "")
       .toLocaleLowerCase("ko-KR");
@@ -41,50 +42,39 @@ function unique<T>(values: T[], key: (value: T) => string) {
 export function buildDreamResultPresentation(
   interpretation: DreamInterpretation,
 ): DreamResultPresentation {
-  const keyScenes = unique(
-    interpretation.keyScenes.slice(0, 4),
-    (scene) => `${scene.title}:${scene.evidence}`,
-  ).map((scene) => ({
-    title: compact(scene.title, 80),
-    evidence: compact(scene.evidence, 180),
-    generalMeaning: compact(scene.generalMeaning, 200),
-    specificMeaning: compact(scene.specificMeaning, 350),
-    connection: compact(scene.connection, 200),
-  }));
-
   return {
-    notice: compact(interpretation.notice, 240),
-    coreMeaning: compact(interpretation.coreMeaning, 220),
-    keyScenes,
-    overallDirection: compact(interpretation.overallDirection, 120),
+    coreConclusion: compact(interpretation.coreConclusion, 180),
+    dreamType: interpretation.dreamType,
+    keyScenes: interpretation.keyScenes.slice(0, 4).map((scene) => ({
+      title: compact(scene.title, 100),
+      meaning: compact(scene.meaning, 280),
+    })),
+    relationshipMeaning: compact(interpretation.relationshipMeaning, 280),
+    objectMeaning: compact(interpretation.objectMeaning, 280),
     interpretationParagraphs: interpretation.integratedInterpretation
       .split(/\n\s*\n/gu)
       .map((paragraph) => paragraph.replace(/\s+/gu, " ").trim())
       .filter(Boolean)
-      .slice(0, 4),
+      .slice(0, 3),
     realLifeConnections: unique(
-      interpretation.realLifeConnections.slice(0, 3),
-      (item) => item,
-    ).map((item) => compact(item, 190)),
-    reflectionQuestion: compact(interpretation.reflectionQuestion, 150),
+      interpretation.realLifeConnections.slice(0, 2),
+    ).map((item) => compact(item, 200)),
+    reflectionQuestions: unique(
+      interpretation.reflectionQuestions.slice(0, 2),
+    ).map((item) => compact(item, 170)),
     caution: compact(interpretation.caution, 180),
   };
 }
 
 export function countVisibleResultCharacters(result: DreamResultPresentation) {
   return [
-    result.notice,
-    result.coreMeaning,
-    ...result.keyScenes.flatMap((scene) => [
-      scene.title,
-      scene.generalMeaning,
-      scene.specificMeaning,
-      scene.connection,
-    ]),
-    result.overallDirection,
+    result.coreConclusion,
+    ...result.keyScenes.flatMap((scene) => [scene.title, scene.meaning]),
+    result.relationshipMeaning,
+    result.objectMeaning,
     ...result.interpretationParagraphs,
     ...result.realLifeConnections,
-    result.reflectionQuestion,
+    ...result.reflectionQuestions,
     result.caution,
   ].join("").length;
 }
