@@ -9,6 +9,10 @@ const cardClass = "min-w-0 rounded-3xl border border-white/10 bg-white/5 p-4 sm:
 
 export default function DreamResult({ interpretation, onReset }: DreamResultProps) {
   if (!interpretation) return null;
+  const interpretationParagraphs = interpretation.interpretation
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
 
   return (
     <section id="result" aria-live="polite" className="mx-4 mt-8 max-w-5xl space-y-4 sm:mx-6 lg:mx-auto">
@@ -57,10 +61,28 @@ export default function DreamResult({ interpretation, onReset }: DreamResultProp
 
       <div className={cardClass}>
         <h3 className="text-lg font-bold text-white sm:text-xl">종합 풀이</h3>
-        <p className="mt-4 whitespace-pre-wrap break-words text-sm leading-7 text-slate-200 sm:text-base sm:leading-8">
-          {interpretation.interpretation}
-        </p>
+        <div className="mt-4 space-y-4">
+          {interpretationParagraphs.map((paragraph, index) => (
+            <p key={`${index}-${paragraph.slice(0, 24)}`} className="break-words text-sm leading-7 text-slate-200 sm:text-base sm:leading-8">
+              {paragraph}
+            </p>
+          ))}
+        </div>
       </div>
+
+      {interpretation.reflectionPoints.length > 0 && (
+        <div className="min-w-0 rounded-3xl border border-violet-300/20 bg-violet-400/[0.07] p-4 sm:p-6">
+          <h3 className="text-lg font-bold text-white sm:text-xl">함께 떠올려볼 점</h3>
+          <ul className="mt-4 space-y-3">
+            {interpretation.reflectionPoints.map((point) => (
+              <li key={point} className="flex min-w-0 gap-3 text-sm leading-7 text-slate-200 sm:text-base">
+                <span aria-hidden="true" className="mt-[0.65rem] size-1.5 shrink-0 rounded-full bg-violet-300" />
+                <span className="min-w-0 break-words">{point}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className={cardClass}>
         <h3 className="text-lg font-bold text-white sm:text-xl">생활 속 참고</h3>

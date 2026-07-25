@@ -33,7 +33,7 @@ npm run dev
 - `NEXT_PUBLIC_GA_MEASUREMENT_ID`: 선택 사항인 방문 통계 측정 ID입니다. 비워두면 관련 스크립트를 불러오지 않습니다.
 - `GOOGLE_SITE_VERIFICATION`: Search Console HTML 태그 인증에서 받은 `content` 값입니다.
 - `DREAM_INTERPRETATION_MODE`: `ai-first`, `hybrid`, `dictionary-only` 중 하나입니다.
-- `DREAM_MAX_OUTPUT_TOKENS`, `DREAM_REQUEST_TIMEOUT_MS`, `DREAM_CONTEXT_ENTRY_LIMIT`: 결과 길이, 제한 시간, 참고 사전 수를 제어합니다.
+- `DREAM_MAX_OUTPUT_TOKENS`, `DREAM_REQUEST_TIMEOUT_MS`, `DREAM_CONTEXT_ENTRY_LIMIT`: 결과 길이, 제한 시간, 참고 사전 수를 제어합니다. 현재 기본값은 각각 `2400`, `30000`, `8`입니다.
 - `DREAM_RATE_LIMIT_PER_MINUTE`, `DREAM_RATE_LIMIT_PER_HOUR`, `DREAM_RATE_LIMIT_PER_DAY`, `DREAM_GLOBAL_DAILY_LIMIT`: 사용자 및 사이트 전체 호출 한도입니다.
 - `DREAM_CACHE_TTL_SECONDS`: 동일 꿈 풀이 결과의 해시 기반 단기 캐시 시간입니다.
 

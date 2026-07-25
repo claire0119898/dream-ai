@@ -6,7 +6,7 @@ import AdPlaceholder from "./AdPlaceholder";
 import DreamInput from "./DreamInput";
 import DreamResult from "./DreamResult";
 
-const CLIENT_REQUEST_TIMEOUT_MS = 25_000;
+const CLIENT_REQUEST_TIMEOUT_MS = 35_000;
 
 export default function HomeDreamInterpreter() {
   const [dream, setDream] = useState("");

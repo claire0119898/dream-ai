@@ -51,6 +51,7 @@ export interface DreamInterpretation {
   emotion: string;
   flow: string;
   interpretation: string;
+  reflectionPoints: string[];
   guidance: string;
   caution: string;
 }
@@ -74,6 +75,8 @@ export interface ContextualDreamInterpretation {
     meaning: string;
   };
   integratedInterpretation: string;
+  personalConnection: string[];
+  reflectionQuestions: string[];
   lifeGuidance: string[];
   caution: string;
 }
