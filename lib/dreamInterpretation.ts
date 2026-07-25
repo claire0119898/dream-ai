@@ -6,7 +6,7 @@ import type {
 import type { DreamRequestContext, DreamScene } from "./dreamContext";
 
 export const DEFAULT_INTERPRETATION_CAUTION =
-  "꿈풀이는 현재의 감정과 경험을 돌아보기 위한 참고입니다. 개인의 상황에 따라 의미가 달라질 수 있으며, 미래의 사건이나 건강·재물의 변화를 단정하는 뜻으로 받아들이지 마세요.";
+  "꿈풀이는 현재의 감정과 경험을 돌아보기 위한 참고이며, 미래의 사건이나 건강·재물의 변화를 단정하지 않습니다.";
 
 const TECHNICAL_TERMS = /\b(?:AI|GPT|OpenAI|LLM|API|prompt|token|model)\b|인공지능|프롬프트|토큰|챗봇/i;
 const HTML_TAG = /<\/?[a-z][^>]*>/i;
@@ -80,28 +80,28 @@ function interpretationParagraphs(value: string) {
     .split(/\n\s*\n/)
     .map((paragraph) => paragraph.trim())
     .filter(Boolean);
-  if (blankLineParagraphs.length >= 3) return blankLineParagraphs;
+  if (blankLineParagraphs.length >= 2) return blankLineParagraphs;
   const lineParagraphs = value
     .split(/\n+/)
     .map((paragraph) => paragraph.trim())
     .filter(Boolean);
-  return lineParagraphs.length >= 3 ? lineParagraphs : blankLineParagraphs;
+  return lineParagraphs.length >= 2 ? lineParagraphs : blankLineParagraphs;
 }
 
 function reflowInterpretationParagraphs(value: string) {
   const existing = interpretationParagraphs(value);
   if (
-    existing.length >= 3 &&
-    existing.length <= 4 &&
+    existing.length >= 2 &&
+    existing.length <= 3 &&
     existing.every((paragraph) => {
       const sentenceCount = proseSentences(paragraph).length;
       return sentenceCount >= 2 && sentenceCount <= 4;
     })
   ) return existing.join("\n\n");
-  if (existing.length > 4) {
-    const groups: string[][] = Array.from({ length: 4 }, () => []);
+  if (existing.length > 3) {
+    const groups: string[][] = Array.from({ length: 3 }, () => []);
     existing.forEach((paragraph, index) => {
-      groups[Math.min(3, Math.floor((index * 4) / existing.length))].push(paragraph);
+      groups[Math.min(2, Math.floor((index * 3) / existing.length))].push(paragraph);
     });
     return groups.filter((group) => group.length).map((group) => group.join(" ")).join("\n\n");
   }
@@ -114,7 +114,7 @@ function reflowInterpretationParagraphs(value: string) {
     .filter(Boolean) ?? [];
   if (sentences.length < 3) return value.trim();
 
-  const targetParagraphs = Math.min(4, Math.max(3, Math.ceil(sentences.length / 2)));
+  const targetParagraphs = Math.min(3, Math.max(2, Math.ceil(sentences.length / 3)));
   const paragraphs: string[] = [];
   let cursor = 0;
   for (let index = 0; index < targetParagraphs; index += 1) {
@@ -296,6 +296,10 @@ function withObjectParticle(word: string) {
   return `${word}${hasBatchim(word) ? "을" : "를"}`;
 }
 
+function withSubjectParticle(word: string) {
+  return `${word}${hasBatchim(word) ? "이" : "가"}`;
+}
+
 function withDirectionParticle(word: string) {
   return `${word}${hasBatchim(word) ? "으로" : "로"}`;
 }
@@ -376,7 +380,7 @@ function relationshipProse(scene: DreamScene) {
   if (scene.action.subtypes.includes("갈등")) {
     return `${subject}와 ${target}의 관계에서 느껴지는 거리나 긴장이 행동을 통해 드러난 장면으로 볼 수 있습니다.`;
   }
-  return `${subject}와 ${target}가 맺고 있는 관계가 말보다 행동을 통해 드러난다는 점이 중요합니다.`;
+  return `${subject}와 ${withSubjectParticle(target)} 맺고 있는 관계가 말보다 행동을 통해 드러난다는 점이 중요합니다.`;
 }
 
 function purposeProse(scene: DreamScene) {
@@ -393,7 +397,7 @@ function ownershipProse(scene: DreamScene) {
   const subject = naturalPersonName(scene.subject?.mention) || object.owner || "그 인물";
   const target = naturalPersonName(scene.target?.mention);
   const transfer = target ? `${target}에게 내어주었다는 점` : "다른 이에게 내어놓았다는 점";
-  return `${object.name}이 특별하게 느껴지는 이유는 ${subject}가 이미 몸에 지니거나 사용하던 물건이기 때문입니다. 새로 마련한 것이 아니라 자신의 것을 ${transfer}에서, 도움뿐 아니라 개인적인 정과 신뢰까지 함께 읽어볼 수 있습니다.`;
+  return `${withSubjectParticle(object.name)} 특별하게 느껴지는 이유는 ${subject}가 이미 몸에 지니거나 사용하던 물건이기 때문입니다. 새로 마련한 것이 아니라 자신의 것을 ${transfer}에서, 도움뿐 아니라 개인적인 정과 신뢰까지 함께 읽어볼 수 있습니다. 이는 자신이 맡아온 몫을 다음 관계와 나누는 모습이기도 합니다.`;
 }
 
 function objectContextProse(scene: DreamScene) {
@@ -443,6 +447,10 @@ function sceneBasedInterpretation(_analysis: DreamAnalysis, context: DreamReques
   const beginning = context.eventFlow.beginning;
   const ending = context.eventFlow.ending;
   const endingChanged = beginning !== ending;
+  const hasNarrativeFlow =
+    meaningfulScenes.length > 1 &&
+    context.eventFlow.changes.length > 0 &&
+    endingChanged;
   const lastScene = meaningfulScenes.at(-1);
   const lastSceneSentence = lastScene && lastScene !== central ? sceneSentence(lastScene) : "";
   const subject = naturalPersonName(central.subject?.mention) || "장면의 인물";
@@ -459,12 +467,7 @@ function sceneBasedInterpretation(_analysis: DreamAnalysis, context: DreamReques
       ? `꿈에서 직접 드러난 ${context.expressedEmotions.join(", ")}은 이 장면을 이해하는 중요한 단서입니다. 같은 행동도 마지막에 남은 느낌에 따라 전혀 다르게 받아들여질 수 있습니다.`
       : `꿈속에서 기쁨이나 불안 같은 감정이 직접 표현되지는 않았습니다. 그래서 어느 한 감정을 사실처럼 정하기보다, ${atmosphereProse(central)} 분위기로 조심스럽게 읽는 편이 자연스럽습니다.`
   );
-  const emotionParagraph = ownership
-    ? (context.expressedEmotions.length
-        ? `꿈에서 직접 드러난 ${context.expressedEmotions.join(", ")}은 장면의 의미를 정하는 단서가 됩니다. 물건을 주고받는 행동보다 그때 남은 느낌을 함께 볼 때 꿈의 결이 더 선명해집니다.`
-        : `꿈속에서 특별한 기쁨이나 불안은 직접 드러나지 않습니다. 따라서 ${subject}의 마음을 하나로 단정하기보다, ${atmosphereProse(central)} 장면으로 보는 편이 자연스럽습니다.`)
-    : "";
-  const flowParagraph = endingChanged && lastSceneSentence
+  const flowParagraph = hasNarrativeFlow && lastSceneSentence
     ? `꿈은 ${centralSentence}에서 ${lastSceneSentence} 쪽으로 움직입니다. 처음의 관계가 마지막 장면에서 어떻게 달라졌는지를 보면, 이 꿈이 무엇을 오래 남기고 있는지 이해하는 데 도움이 됩니다.`
     : "";
   const isDeceasedGrandparent = /돌아가신\s+(?:할머니|할아버지)/u.test(central.subject?.mention ?? "");
@@ -489,29 +492,32 @@ function sceneBasedInterpretation(_analysis: DreamAnalysis, context: DreamReques
         : central.purpose.evidence
           ? `요즘 “${central.purpose.evidence}”라는 말처럼 누군가의 도움이나 배려를 새삼 크게 느낀 일이 있었나요?`
           : `꿈의 마지막 장면을 다시 떠올렸을 때, 관계에서 가장 마음에 남는 부분은 무엇인가요?`;
-  const finalParagraph =
-    `${realitySentence} 이 꿈을 특정 사건의 예고로 단정하기보다, 장면에 담긴 관계와 행동을 현실의 경험과 나란히 놓아보는 정도가 알맞습니다. ${question}`;
-  const paragraphs = [paragraph1, paragraph2, emotionParagraph, flowParagraph, finalParagraph]
-    .filter(Boolean);
-  const integratedParagraphs =
-    paragraphs.length > 4
-      ? [paragraph1, `${paragraph2} ${emotionParagraph}`.trim(), flowParagraph, finalParagraph]
-      : paragraphs;
+  const middleParagraph = [paragraph2, flowParagraph].filter(Boolean).join(" ");
+  const integratedParagraphs = [paragraph1, middleParagraph, realitySentence].filter(Boolean);
+  const mainThemes = [...new Set([
+    ...central.purpose.meanings,
+    ...central.relationshipDynamics,
+    ...central.action.subtypes,
+  ])].slice(0, 2);
+  const summary = compactText(
+    central.action.normalized === "주다" || central.action.subtypes.includes("지원")
+      ? `이 꿈은 ${mainThemes.join("과 ") || "도움과 책임"}이 한 관계에서 다른 관계로 이어지는 모습을 담고 있습니다. ${central.object?.name ?? "물건"} 자체보다 누가 자신의 몫을 내어주었고 그 마음이 누구에게 향했는지가 중심이며, 가까운 사람 사이에서 오간 배려의 무게를 돌아보게 합니다.`
+      : `이 꿈은 ${mainThemes.join("과 ") || atmosphereProse(central)} 흐름을 담고 있습니다. 개별 상징보다 ${subject}와 ${target} 사이에서 어떤 행동이 일어났고 마지막에 무엇이 달라졌는지가 중심입니다. 최근 비슷한 관계나 선택을 마주한 경험과 나란히 살펴볼 수 있습니다.`,
+    180
+  );
 
   return {
-    summary:
-      `${centralSentence}이 이 꿈의 중심에 있습니다. 물건이나 인물을 따로 떼어 보기보다, ${subject}가 ${target}에게 직접 행동한 이유와 그 관계가 어디로 이어지는지를 함께 살피는 꿈풀이입니다.`,
+    summary,
     emotion: context.expressedEmotions.length
       ? `꿈에서 직접 드러난 감정은 ${context.expressedEmotions.join(", ")}입니다. 장면에서 예상되는 분위기보다 사용자가 실제로 느낀 감정을 먼저 놓고 보는 편이 자연스럽습니다.`
       : `꿈속에서 직접 표현된 감정은 없습니다. 따라서 특정 감정을 만들어내기보다, ${atmosphereProse(central)} 장면의 분위기만 조심스럽게 살펴봅니다.`,
     flow: `시작: ${compactText(beginning, 150)}\n변화: ${context.eventFlow.changes.length ? `${context.eventFlow.changes.length}개의 장면을 거쳐 흐름이 이어집니다.` : "중심 사건이 한 장면 안에서 이어집니다."}\n마지막: ${compactText(ending, 150)}\n${endingChanged ? "처음과 마지막 사이에서 인물의 행동과 관계가 어떻게 달라지는지가 중요한 단서입니다." : "한 장면에 머문 만큼 행동의 이유와 관계의 방향이 중심이 됩니다."}`,
     interpretation: integratedParagraphs.join("\n\n"),
-    reflectionPoints: [
-      realitySentence,
-      question,
-    ],
+    reflectionPoints: [question],
     guidance:
-      `• ${subject}와 ${target} 사이에서 실제로 오간 행동을 한 문장으로 적어보세요.\n• ${central.object?.name ? `${central.object.name}이 누구의 것이었고 왜 특별했는지` : "그 행동이 왜 일어났고 무엇으로 이어졌는지"} 떠올려보세요.\n• 꿈의 마지막 분위기와 최근 비슷하게 느낀 장면이 있었는지 가볍게 비교해보세요.`,
+      `• ${subject}와 ${target} 사이에서 실제로 오간 행동을 한 문장으로 적어보세요.\n• ${central.object?.name ? `${withSubjectParticle(central.object.name)} 누구의 것이었고 왜 특별했는지` : "그 행동이 왜 일어났고 무엇으로 이어졌는지"} 떠올려보세요.\n• 꿈의 마지막 분위기와 최근 비슷하게 느낀 장면이 있었는지 가볍게 비교해보세요.`,
+    hasExplicitEmotion: context.expressedEmotions.length > 0,
+    hasNarrativeFlow,
   };
 }
 
@@ -547,6 +553,8 @@ export function createDictionaryInterpretation(
     reflectionPoints: sceneBased?.reflectionPoints ?? [],
     guidance: sceneBased?.guidance ?? analysis.advice,
     caution: DEFAULT_INTERPRETATION_CAUTION,
+    hasExplicitEmotion: sceneBased?.hasExplicitEmotion ?? analysis.emotions.length > 0,
+    hasNarrativeFlow: sceneBased?.hasNarrativeFlow ?? analysis.situations.length > 1,
   };
 }
 
@@ -563,7 +571,7 @@ export function validateContextualInterpretation(
     typeof candidate.integratedInterpretation !== "string" ||
     typeof candidate.caution !== "string"
   ) return invalid();
-  if (!Array.isArray(candidate.symbols) || candidate.symbols.length < 1 || candidate.symbols.length > 6) {
+  if (!Array.isArray(candidate.symbols) || candidate.symbols.length < 1 || candidate.symbols.length > 3) {
     return invalid();
   }
   if (!Array.isArray(candidate.lifeGuidance) || candidate.lifeGuidance.length !== 3) {
@@ -576,19 +584,9 @@ export function validateContextualInterpretation(
     return invalid();
   }
   const summary = naturalizeReportLanguage(candidate.summary);
-  let integratedInterpretation = naturalizeReportLanguage(
+  const integratedInterpretation = naturalizeReportLanguage(
     reflowInterpretationParagraphs(candidate.integratedInterpretation)
   );
-  const firstReflectionQuestion = candidate.reflectionQuestions[0];
-  if (
-    typeof integratedInterpretation === "string" &&
-    !integratedInterpretation.includes("?") &&
-    typeof firstReflectionQuestion === "string" &&
-    firstReflectionQuestion.trim().endsWith("?")
-  ) {
-    const separator = paragraphCount(integratedInterpretation) >= 5 ? " " : "\n\n";
-    integratedInterpretation = `${integratedInterpretation.trim()}${separator}${firstReflectionQuestion.trim()}`;
-  }
   const emotion = candidate.emotionAnalysis;
   const flow = candidate.flowAnalysis;
   if (
@@ -608,9 +606,9 @@ export function validateContextualInterpretation(
   const flowEnding = naturalizeReportLanguage(flow.ending);
   const flowMeaning = naturalizeReportLanguage(flow.meaning);
 
-  if (!isSafeText(summary, 120, 260)) {
+  if (!isSafeText(summary, 120, 180)) {
     const rejectedSummary = String(summary);
-    if (rejectedSummary.length < 120 || rejectedSummary.length > 260) return qualityRejected("summary_length");
+    if (rejectedSummary.length < 120 || rejectedSummary.length > 180) return qualityRejected("summary_length");
     if (TECHNICAL_TERMS.test(rejectedSummary)) return qualityRejected("summary_technical");
     if (HTML_TAG.test(rejectedSummary)) return qualityRejected("summary_html");
     return qualityRejected("summary_deterministic");
@@ -622,12 +620,9 @@ export function validateContextualInterpretation(
   if (!isSafeText(flowChange, 2, 220)) return qualityRejected("flow_change");
   if (!isSafeText(flowEnding, 2, 180)) return qualityRejected("flow_ending");
   if (!isSafeText(flowMeaning, 150, 400)) return qualityRejected("flow_meaning");
-  if (!isSafeText(integratedInterpretation, 650, 1100)) return qualityRejected("integrated_length_or_safety");
-  if (paragraphCount(integratedInterpretation) < 3 || paragraphCount(integratedInterpretation) > 4) {
+  if (!isSafeText(integratedInterpretation, 450, 700)) return qualityRejected("integrated_length_or_safety");
+  if (paragraphCount(integratedInterpretation) < 2 || paragraphCount(integratedInterpretation) > 3) {
     return qualityRejected("paragraph_count");
-  }
-  if (!integratedInterpretation.includes("?")) {
-    return qualityRejected("missing_question");
   }
   if (genericPhraseCount(integratedInterpretation) > 1) return qualityRejected("generic_phrases");
   if (REPORT_STYLE_LANGUAGE.test(`${summary} ${emotionInterpretation} ${integratedInterpretation}`)) {
@@ -766,7 +761,7 @@ export function validateContextualInterpretation(
   return {
     ok: true,
     value: {
-      summary: compactText(summary, 260),
+      summary: compactText(summary, 180),
       symbols: validatedSymbols,
       emotionAnalysis: {
         expressedEmotion: compactText(expressedEmotion, 160),
@@ -779,7 +774,7 @@ export function validateContextualInterpretation(
         ending: compactText(flowEnding, 180),
         meaning: compactText(flowMeaning, 400),
       },
-      integratedInterpretation: compactParagraphText(integratedInterpretation, 1100),
+      integratedInterpretation: compactParagraphText(integratedInterpretation, 700),
       personalConnection: personalConnection as string[],
       reflectionQuestions: reflectionQuestions as string[],
       lifeGuidance: lifeGuidance as string[],
@@ -793,19 +788,21 @@ export function validateCachedInterpretation(value: unknown): DreamInterpretatio
   const candidate = value as Record<string, unknown>;
   if (
     candidate.title !== "꿈풀이" ||
-    !isSafeText(candidate.summary, 120, 500) ||
+    !isSafeText(candidate.summary, 120, 180) ||
     !isSafeText(candidate.emotion, 150, 1400) ||
     !isSafeText(candidate.flow, 180, 1800) ||
-    !isSafeText(candidate.interpretation, 650, 1100) ||
+    !isSafeText(candidate.interpretation, 450, 700) ||
     !isSafeText(candidate.guidance, 45, 1400) ||
     candidate.caution !== DEFAULT_INTERPRETATION_CAUTION ||
+    typeof candidate.hasExplicitEmotion !== "boolean" ||
+    typeof candidate.hasNarrativeFlow !== "boolean" ||
     !Array.isArray(candidate.symbols) ||
     !Array.isArray(candidate.reflectionPoints) ||
-    candidate.reflectionPoints.length < 2 ||
-    candidate.reflectionPoints.length > 4 ||
-    candidate.symbols.length > 6
+    candidate.reflectionPoints.length < 1 ||
+    candidate.reflectionPoints.length > 3 ||
+    candidate.symbols.length > 3
   ) return null;
-  if (paragraphCount(candidate.interpretation) < 3 || paragraphCount(candidate.interpretation) > 4) return null;
+  if (paragraphCount(candidate.interpretation) < 2 || paragraphCount(candidate.interpretation) > 3) return null;
 
   const symbols = candidate.symbols.map((symbol) => {
     if (!symbol || typeof symbol !== "object" || Array.isArray(symbol)) return null;
@@ -824,14 +821,16 @@ export function validateCachedInterpretation(value: unknown): DreamInterpretatio
 
   return {
     title: "꿈풀이",
-    summary: compactText(candidate.summary, 500),
+    summary: compactText(candidate.summary, 180),
     symbols: symbols as DreamInterpretation["symbols"],
     emotion: compactText(candidate.emotion, 1400),
     flow: compactMultilineText(candidate.flow, 1800),
-    interpretation: compactParagraphText(candidate.interpretation, 1100),
+    interpretation: compactParagraphText(candidate.interpretation, 700),
     reflectionPoints: reflectionPoints as string[],
     guidance,
     caution: DEFAULT_INTERPRETATION_CAUTION,
+    hasExplicitEmotion: candidate.hasExplicitEmotion,
+    hasNarrativeFlow: candidate.hasNarrativeFlow,
   };
 }
 
@@ -863,15 +862,16 @@ export function mergeInterpretations(
   return {
     title: "꿈풀이",
     summary: contextual.summary,
-    symbols: [...mergedDictionarySymbols, ...additionalSymbols].slice(0, 6),
+    symbols: [...mergedDictionarySymbols, ...additionalSymbols].slice(0, 3),
     emotion: `${emotionPrefix}${contextual.emotionAnalysis.expressedEmotion}\n${contextual.emotionAnalysis.contrast}\n${contextual.emotionAnalysis.interpretation}`,
     flow: `시작: ${contextual.flowAnalysis.beginning}\n변화: ${contextual.flowAnalysis.change}\n마지막: ${contextual.flowAnalysis.ending}\n${contextual.flowAnalysis.meaning}`,
     interpretation: contextual.integratedInterpretation,
     reflectionPoints: [
-      ...contextual.personalConnection,
       ...contextual.reflectionQuestions,
-    ].slice(0, 4),
+    ].slice(0, 3),
     guidance: contextual.lifeGuidance.map((item) => `• ${item}`).join("\n"),
     caution: DEFAULT_INTERPRETATION_CAUTION,
+    hasExplicitEmotion: dictionary.hasExplicitEmotion || detectedEmotions.length > 0,
+    hasNarrativeFlow: dictionary.hasNarrativeFlow,
   };
 }

@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:scenes": "node --no-warnings --experimental-strip-types scripts/verify-scene-analysis.mjs"
+    "test:scenes": "node --no-warnings --experimental-strip-types scripts/verify-scene-analysis.mjs",
+    "test:result": "node --no-warnings --experimental-strip-types scripts/verify-result-presentation.mjs"
   },
   "dependencies": {
     "next": "16.2.10",

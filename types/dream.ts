@@ -54,6 +54,8 @@ export interface DreamInterpretation {
   reflectionPoints: string[];
   guidance: string;
   caution: string;
+  hasExplicitEmotion: boolean;
+  hasNarrativeFlow: boolean;
 }
 
 export interface ContextualDreamInterpretation {

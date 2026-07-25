@@ -49,7 +49,7 @@ function limiterKeys(input: ReserveInput) {
 }
 
 function interpretationCacheKey(dreamHash: string) {
-  return `jamgyeol:interpretation:v5:${dreamHash}`;
+  return `jamgyeol:interpretation:v6:${dreamHash}`;
 }
 
 export class MemoryExternalUsageStore implements ExternalUsageStore {
