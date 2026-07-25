@@ -43,42 +43,35 @@ export type DreamAnalysis = {
 
 export interface DreamInterpretation {
   title: string;
-  summary: string;
-  symbols: Array<{
-    name: string;
-    meaning: string;
+  notice: string;
+  coreMeaning: string;
+  keyScenes: Array<{
+    title: string;
+    evidence: string;
+    generalMeaning: string;
+    specificMeaning: string;
+    connection: string;
   }>;
-  emotion: string;
-  flow: string;
-  interpretation: string;
-  reflectionPoints: string[];
-  guidance: string;
+  overallDirection: string;
+  integratedInterpretation: string;
+  realLifeConnections: string[];
+  reflectionQuestion: string;
   caution: string;
-  hasExplicitEmotion: boolean;
-  hasNarrativeFlow: boolean;
 }
 
 export interface ContextualDreamInterpretation {
-  summary: string;
-  symbols: Array<{
-    name: string;
+  notice: string;
+  coreMeaning: string;
+  keyScenes: Array<{
+    title: string;
     evidence: string;
-    contextualMeaning: string;
+    generalMeaning: string;
+    specificMeaning: string;
+    connection: string;
   }>;
-  emotionAnalysis: {
-    expressedEmotion: string;
-    contrast: string;
-    interpretation: string;
-  };
-  flowAnalysis: {
-    beginning: string;
-    change: string;
-    ending: string;
-    meaning: string;
-  };
+  overallDirection: string;
   integratedInterpretation: string;
-  personalConnection: string[];
-  reflectionQuestions: string[];
-  lifeGuidance: string[];
+  realLifeConnections: string[];
+  reflectionQuestion: string;
   caution: string;
 }

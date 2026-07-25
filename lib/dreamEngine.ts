@@ -200,7 +200,7 @@ export function analyzeDream(dream: string): DreamAnalysis {
 
       if (detectedEmotions.length > 0) {
         interpretationParts.push(
-          `꿈속에서 느껴진 감정은 ${detectedEmotions.join(", ")}(으)로 읽힙니다.`
+          `꿈속에서는 ${detectedEmotions.join(", ")}의 감정이 두드러집니다.`
         );
       }
 
@@ -211,7 +211,7 @@ export function analyzeDream(dream: string): DreamAnalysis {
         situations: genericSituationTypes,
         interpretation: interpretationParts.join("\n\n"),
         advice:
-          "등장인물이 누구인지보다, 꿈속에서 그 사람과 있었던 상황과 그때 느낀 감정 자체에 집중해서 해석해보는 것을 추천합니다.",
+          "등장인물의 이름보다 그 사람과 어떤 일이 있었고, 그때 어떤 감정이 남았는지를 중심으로 살펴보는 편이 자연스럽습니다.",
         relatedKeywords: [],
       };
     }
@@ -265,7 +265,7 @@ export function analyzeDream(dream: string): DreamAnalysis {
 
   if (detectedEmotions.length > 0) {
     interpretationParts.push(
-      `꿈속에서 느껴진 감정은 ${detectedEmotions.join(", ")}(으)로 읽힙니다. 상징과 감정을 함께 살펴보면 현재 마음 상태를 더 입체적으로 이해할 수 있습니다.`
+      `꿈속에서는 ${detectedEmotions.join(", ")}의 감정이 두드러집니다. 상징이 등장한 장면과 그 감정을 함께 보면 꿈의 맥락을 더 구체적으로 이해할 수 있습니다.`
     );
   }
 
@@ -287,7 +287,7 @@ export function analyzeDream(dream: string): DreamAnalysis {
     situations: Array.from(situationTypes),
     interpretation: interpretationParts.join("\n\n"),
     advice:
-      "꿈은 현실을 그대로 예언한다기보다 현재 마음 상태를 상징적으로 보여주는 경우가 많습니다. 참고용으로 편안하게 받아들여보세요.",
+      "꿈에 남은 장면과 감정을 최근 경험과 나란히 놓아보면, 무엇이 마음에 오래 남았는지 이해하는 데 도움이 될 수 있습니다.",
     relatedKeywords,
   };
 }

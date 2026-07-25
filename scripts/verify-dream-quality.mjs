@@ -84,44 +84,47 @@ for (const testCase of selectedCases) {
   }
 
   const combined = [
-    interpretation.summary,
-    interpretation.emotion,
-    interpretation.flow,
-    interpretation.interpretation,
-    ...interpretation.symbols.map((symbol) => `${symbol.name} ${symbol.meaning}`),
+    interpretation.coreMeaning,
+    interpretation.overallDirection,
+    interpretation.integratedInterpretation,
+    ...interpretation.keyScenes.flatMap((scene) => [
+      scene.title,
+      scene.evidence,
+      scene.generalMeaning,
+      scene.specificMeaning,
+      scene.connection,
+    ]),
+    ...interpretation.realLifeConnections,
+    interpretation.reflectionQuestion,
   ].join(" ");
   const matched = testCase.expected.filter((term) => combined.includes(term));
   const matchedConcepts = testCase.concepts.filter((options) =>
     options.some((term) => combined.includes(term))
   );
-  const guidanceCount = interpretation.guidance.split("\n").filter(Boolean).length;
-  const paragraphCount = interpretation.interpretation
+  const paragraphCount = interpretation.integratedInterpretation
     .split(/\n\s*\n/)
     .map((paragraph) => paragraph.trim())
     .filter(Boolean).length;
-  const reflectionPoints = Array.isArray(interpretation.reflectionPoints)
-    ? interpretation.reflectionPoints
-    : [];
-  const reflectionQuestionCount = reflectionPoints.filter((point) => point.trim().endsWith("?")).length;
+  const reflectionQuestionCount = interpretation.reflectionQuestion.trim().endsWith("?") ? 1 : 0;
   const possibilityCount = (
-    `${interpretation.interpretation} ${reflectionPoints.join(" ")}`.match(/수 있습니다|수도 있습니다|가능성/g) ?? []
+    `${interpretation.integratedInterpretation} ${interpretation.realLifeConnections.join(" ")}`.match(/수 있습니다|수도 있습니다|연결해볼 수 있습니다|가능성/g) ?? []
   ).length;
   const technicalTermsExposed = /\b(?:AI|GPT|OpenAI|LLM|API|prompt|token|model)\b|인공지능|프롬프트|토큰|챗봇/i.test(
     JSON.stringify(payload)
   );
   const dictionaryStyleCount = (
-    interpretation.interpretation.match(/(?:을|를|은|는)\s*(?:상징합니다|의미합니다)|(?:으로|라고)\s*해석됩니다/g) ?? []
+    interpretation.integratedInterpretation.match(/(?:을|를|은|는)\s*(?:상징합니다|의미합니다)|(?:으로|라고)\s*해석됩니다/g) ?? []
   ).length;
-  const sentences = interpretation.interpretation
+  const sentences = interpretation.integratedInterpretation
     .replace(/\n+/g, " ")
     .match(/[^.!?。！？]+[.!?。！？]+|[^.!?。！？]+$/g) ?? [];
   const maxSentenceLength = Math.max(0, ...sentences.map((sentence) => sentence.trim().length));
   const genericEnding = /(?:긍정적으로 생각|편안하게 받아들|마음을 돌아보|좋게 생각)(?:세요|보세요)?[.!?。！？]*$/u.test(
-    interpretation.interpretation.trim()
+    interpretation.integratedInterpretation.trim()
   );
   const noEmotionAcknowledged = !testCase.expectsNoExplicitEmotion ||
     /(?:직접|분명하게).{0,18}(?:감정|느낌).{0,18}(?:없|않|드러나지|표현되지)|(?:감정|느낌).{0,18}(?:명시되지|분명하지)/u.test(
-      interpretation.emotion
+      interpretation.integratedInterpretation
     );
 
   console.log(
@@ -131,15 +134,14 @@ for (const testCase of selectedCases) {
       sceneMatches: `${matched.length}/${testCase.expected.length}`,
       missingScenes: testCase.expected.filter((term) => !matched.includes(term)),
       conceptMatches: `${matchedConcepts.length}/${testCase.concepts.length}`,
-      summaryLength: interpretation.summary.length,
-      emotionLength: interpretation.emotion.length,
-      flowLength: interpretation.flow.length,
-      interpretationLength: interpretation.interpretation.length,
+      coreMeaningLength: interpretation.coreMeaning.length,
+      keySceneCount: interpretation.keyScenes.length,
+      sceneSpecificLengths: interpretation.keyScenes.map((scene) => scene.specificMeaning.length),
+      interpretationLength: interpretation.integratedInterpretation.length,
       paragraphCount,
-      reflectionPointCount: reflectionPoints.length,
       reflectionQuestionCount,
       possibilityCount,
-      guidanceCount,
+      realLifeConnectionCount: interpretation.realLifeConnections.length,
       dictionaryStyleCount,
       maxSentenceLength,
       genericEnding,

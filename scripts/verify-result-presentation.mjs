@@ -1,15 +1,10 @@
 import { buildDreamRequestContext } from "../lib/dreamContext.ts";
-import {
-  createDictionaryInterpretation,
-  DEFAULT_INTERPRETATION_CAUTION,
-} from "../lib/dreamInterpretation.ts";
+import { createDictionaryInterpretation } from "../lib/dreamInterpretation.ts";
 import {
   buildDreamResultPresentation,
   countVisibleResultCharacters,
 } from "../lib/dreamPresentation.ts";
 
-const dream =
-  "꿈에서 친정아빠가 남편한테 살림에 보태라고 차고 계시던 은팔찌를 주셨어요.";
 const emptyAnalysis = {
   summary: "",
   keywords: [],
@@ -20,109 +15,153 @@ const emptyAnalysis = {
   relatedKeywords: [],
 };
 
+const forbidden =
+  /\b(?:AI|GPT|OpenAI|API|prompt|token|model)\b|인공지능|프롬프트|내포|시사|부각|상징화|심층적\s*의미|최근\s*대화를\s*보면|앱\s*출시|개인\s*사업/iu;
+
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-function sentenceCount(value) {
-  return (
-    value
-      .match(/[^.!?。！？]+[.!?。！？]+|[^.!?。！？]+$/g)
-      ?.map((sentence) => sentence.trim())
-      .filter(Boolean).length ?? 0
-  );
-}
-
 function normalizedSentences(values) {
   return values
-    .flatMap((value) => value.split(/[.!?。！？\n]+/))
+    .flatMap((value) => value.split(/[.!?。！？\n]+/u))
     .map((sentence) =>
       sentence
-        .replace(/\s+/g, "")
-        .replace(/["'“”‘’.,!?·:;()[\]{}•→]/g, "")
-        .toLocaleLowerCase("ko-KR")
+        .replace(/\s+/gu, "")
+        .replace(/["'“”‘’.,!?·:;()[\]{}•→]/gu, "")
+        .toLocaleLowerCase("ko-KR"),
     )
     .filter((sentence) => sentence.length >= 16);
 }
 
-const context = buildDreamRequestContext(dream, emptyAnalysis, 8);
-const interpretation = createDictionaryInterpretation(emptyAnalysis, context);
-const result = buildDreamResultPresentation(interpretation);
-const visibleCharacters = countVisibleResultCharacters(result);
-
-// 이전 결과 화면은 감정·흐름·현실 연결·생활 참고를 각각 표시했고,
-// 종합 풀이에도 감정 부재·고정 안내·질문을 다시 포함했습니다.
-const previousVisibleValues = [
-  interpretation.summary,
-  ...interpretation.symbols.flatMap((symbol) => [symbol.name, symbol.meaning]),
-  interpretation.emotion,
-  interpretation.flow,
-  interpretation.interpretation,
-  interpretation.interpretation.split(/\n\s*\n/).at(-1) ?? "",
-  "꿈속에서 특별한 기쁨이나 불안은 직접 드러나지 않습니다. 따라서 인물의 마음을 하나로 단정하기보다, 서로의 몫을 나누고 마음을 건네는 장면으로 보는 편이 자연스럽습니다.",
-  "이 꿈을 특정 사건의 예고로 단정하기보다, 장면에 담긴 관계와 행동을 현실의 경험과 나란히 놓아보는 정도가 알맞습니다.",
-  ...interpretation.reflectionPoints,
-  interpretation.guidance,
-  DEFAULT_INTERPRETATION_CAUTION,
+const cases = [
+  {
+    name: "움직이는 거대한 건물",
+    dream:
+      "가족들과 잔디밭에 누워 하늘을 보고 있었는데, 하늘에 닿을 만큼 높은 건물이 보였습니다. 그런데 그 건물이 갑자기 두 발로 일어나 우리 앞을 천천히 걸어 지나갔습니다. 너무 크고 선명해서 계속 바라봤습니다.",
+    expected: ["높은 건물", "가족", "누워", "두 발", "걸어", "바라"],
+  },
+  {
+    name: "가족 사이의 은팔찌 전달",
+    dream:
+      "꿈에서 친정아빠가 남편한테 살림에 보태라고 차고 계시던 은팔찌를 주셨어요.",
+    expected: ["친정아버지", "남편", "은팔찌", "살림", "책임", "애정"],
+  },
+  {
+    name: "시험 종료 뒤의 해방",
+    dream:
+      "시험장에 늦게 도착했는데 시험지는 이미 제출되어 있었습니다. 그런데 불안하지 않았고 오히려 홀가분했습니다. 밖으로 나오자 비가 그치고 햇빛이 비쳤습니다.",
+    expected: ["늦", "시험", "불안하지", "홀가분", "비가 그치", "햇빛"],
+  },
+  {
+    name: "문을 열어준 뒤의 변화",
+    dream:
+      "고양이가 창문 밖에서 계속 울고 있었는데 문을 열어주자 새로 변해 날아갔습니다. 처음에는 걱정했지만 마지막에는 마음이 놓였습니다.",
+    expected: ["고양이", "창문", "문을 열", "새로 변", "날아", "걱정"],
+  },
 ];
-const previousVisibleCharacters = previousVisibleValues.join("").length;
-const reductionPercent = Math.round(
-  (1 - visibleCharacters / previousVisibleCharacters) * 100
-);
 
-assert(result.summary.length >= 120 && result.summary.length <= 180, "요약은 120~180자여야 합니다.");
-assert(sentenceCount(result.summary) >= 2 && sentenceCount(result.summary) <= 3, "요약은 2~3문장이어야 합니다.");
-assert(
-  interpretation.interpretation.length >= 450 &&
-    interpretation.interpretation.length <= 700,
-  "종합 풀이는 450~700자여야 합니다."
-);
-assert(
-  result.interpretationParagraphs.length >= 2 &&
-    result.interpretationParagraphs.length <= 3,
-  "종합 풀이는 2~3문단이어야 합니다."
-);
-assert(result.scenes.length <= 3, "눈여겨볼 장면은 최대 3개여야 합니다.");
-assert(
-  result.thoughtPoints.length <= 3 &&
-    result.thoughtPoints.every((point) => point.endsWith("?")),
-  "함께 생각해볼 점은 질문만 최대 3개여야 합니다."
-);
-assert(result.emotion === null, "직접 표현된 감정이 없는 꿈은 감정 내용을 숨겨야 합니다.");
-assert(result.flow === null, "한 장면 꿈은 흐름 내용을 숨겨야 합니다.");
-assert(reductionPercent >= 35 && reductionPercent <= 50, "표시 분량은 기존보다 35~50% 줄어야 합니다.");
+const summaries = cases.map((testCase) => {
+  const context = buildDreamRequestContext(
+    testCase.dream,
+    emptyAnalysis,
+    8,
+  );
+  const interpretation = createDictionaryInterpretation(emptyAnalysis, context);
+  const result = buildDreamResultPresentation(interpretation);
+  const visibleText = [
+    result.coreMeaning,
+    ...result.keyScenes.flatMap((scene) => [
+      scene.title,
+      scene.evidence,
+      scene.generalMeaning,
+      scene.specificMeaning,
+      scene.connection,
+    ]),
+    result.overallDirection,
+    ...result.interpretationParagraphs,
+    ...result.realLifeConnections,
+    result.reflectionQuestion,
+    result.caution,
+  ].join(" ");
 
-const visibleSentences = normalizedSentences([
-  result.summary,
-  ...result.interpretationParagraphs,
-  ...result.scenes.map((scene) => scene.meaning),
-  ...result.thoughtPoints,
-  result.caution,
-]);
-assert(
-  new Set(visibleSentences).size === visibleSentences.length,
-  "결과 영역에 동일 문장이 반복되면 안 됩니다."
+  assert(
+    result.coreMeaning.length >= 120 && result.coreMeaning.length <= 220,
+    `${testCase.name}: 핵심 의미는 120~220자여야 합니다.`,
+  );
+  assert(
+    result.keyScenes.length >= 2 && result.keyScenes.length <= 4,
+    `${testCase.name}: 핵심 장면은 2~4개여야 합니다.`,
+  );
+  assert(
+    result.keyScenes.every((scene) => scene.specificMeaning.length >= 100),
+    `${testCase.name}: 각 장면은 이 꿈에서 특별한 이유를 100자 이상 설명해야 합니다.`,
+  );
+  assert(
+    interpretation.integratedInterpretation.length >= 500 &&
+      interpretation.integratedInterpretation.length <= 850,
+    `${testCase.name}: 종합 풀이는 500~850자여야 합니다.`,
+  );
+  assert(
+    result.interpretationParagraphs.length >= 3 &&
+      result.interpretationParagraphs.length <= 4,
+    `${testCase.name}: 종합 풀이는 3~4문단이어야 합니다.`,
+  );
+  assert(
+    result.realLifeConnections.length >= 2 &&
+      result.realLifeConnections.length <= 3,
+    `${testCase.name}: 현실 연결은 2~3개여야 합니다.`,
+  );
+  assert(
+    result.reflectionQuestion.endsWith("?"),
+    `${testCase.name}: 생각해볼 질문은 하나의 질문이어야 합니다.`,
+  );
+  assert(
+    testCase.expected.every((term) => visibleText.includes(term)),
+    `${testCase.name}: 필수 장면 또는 의미가 빠졌습니다.`,
+  );
+  assert(
+    !forbidden.test(visibleText),
+    `${testCase.name}: 기술 용어, 어려운 보고서 문체 또는 추측한 개인정보가 포함됐습니다.`,
+  );
+  const sentences = normalizedSentences([
+    result.coreMeaning,
+    ...result.keyScenes.flatMap((scene) => [
+      scene.generalMeaning,
+      scene.specificMeaning,
+      scene.connection,
+    ]),
+    ...result.interpretationParagraphs,
+    ...result.realLifeConnections,
+    result.reflectionQuestion,
+  ]);
+  assert(
+    new Set(sentences).size === sentences.length,
+    `${testCase.name}: 동일 문장이 여러 영역에 반복됩니다.`,
+  );
+  return {
+    name: testCase.name,
+    keyScenes: result.keyScenes.length,
+    coreLength: result.coreMeaning.length,
+    integratedLength: interpretation.integratedInterpretation.length,
+    visibleLength: countVisibleResultCharacters(result),
+    paragraphs: result.interpretationParagraphs.length,
+  };
+});
+
+const averageVisibleLength = Math.round(
+  summaries.reduce((sum, item) => sum + item.visibleLength, 0) /
+    summaries.length,
 );
 
 console.log(
   JSON.stringify(
     {
-      cards: { before: 8, after: 5 },
-      characters: {
-        before: previousVisibleCharacters,
-        after: visibleCharacters,
-        reductionPercent,
-      },
-      summaryLength: result.summary.length,
-      interpretationLength: interpretation.interpretation.length,
-      interpretationParagraphs: result.interpretationParagraphs.length,
-      notableScenes: result.scenes.length,
-      thoughtPoints: result.thoughtPoints.length,
-      emotionShown: Boolean(result.emotion),
-      flowShown: Boolean(result.flow),
-      duplicateSentences: visibleSentences.length - new Set(visibleSentences).size,
+      cases: summaries,
+      averageVisibleLength,
+      result: "passed",
     },
     null,
-    2
-  )
+    2,
+  ),
 );

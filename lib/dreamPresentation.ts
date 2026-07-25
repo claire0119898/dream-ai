@@ -1,115 +1,90 @@
 import type { DreamInterpretation } from "../types/dream";
 
 export type DreamResultPresentation = {
-  summary: string;
+  notice: string;
+  coreMeaning: string;
+  keyScenes: DreamInterpretation["keyScenes"];
+  overallDirection: string;
   interpretationParagraphs: string[];
-  scenes: DreamInterpretation["symbols"];
-  emotion: string | null;
-  flow: string | null;
-  thoughtPoints: string[];
+  realLifeConnections: string[];
+  reflectionQuestion: string;
   caution: string;
 };
 
-function normalized(value: string) {
-  return value
-    .normalize("NFKC")
-    .replace(/\s+/g, "")
-    .replace(/["'“”‘’.,!?·:;()[\]{}•→]/g, "")
-    .toLocaleLowerCase("ko-KR");
-}
-
-function uniqueTexts(values: string[]) {
-  const seen = new Set<string>();
-  return values.filter((value) => {
-    const key = normalized(value);
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
 function compact(value: string, maxLength: number) {
-  const text = value.replace(/\s+/g, " ").trim();
+  const text = value.replace(/\s+/gu, " ").trim();
   if (text.length <= maxLength) return text;
   const shortened = text.slice(0, maxLength);
   const sentenceEnd = Math.max(
     shortened.lastIndexOf("."),
     shortened.lastIndexOf("?"),
-    shortened.lastIndexOf("!")
+    shortened.lastIndexOf("!"),
   );
-  return sentenceEnd >= Math.floor(maxLength * 0.55)
+  return sentenceEnd >= Math.floor(maxLength * 0.62)
     ? shortened.slice(0, sentenceEnd + 1)
     : `${shortened.trimEnd()}…`;
 }
 
-function paragraphs(value: string) {
-  const parsed = value
-    .split(/\n\s*\n/)
-    .map((paragraph) => paragraph.replace(/\s+/g, " ").trim())
-    .filter(Boolean);
-  if (parsed.length <= 3) return parsed;
-  return [parsed[0], parsed.slice(1, -1).join(" "), parsed.at(-1) ?? ""].filter(Boolean);
-}
-
-function visibleEmotion(interpretation: DreamInterpretation) {
-  if (!interpretation.hasExplicitEmotion) return null;
-  const lines = uniqueTexts(
-    interpretation.emotion
-      .split(/\n+/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-  );
-  const directEmotion = lines.find((line) => /직접 드러난 감정|직접 표현된 감정/u.test(line));
-  const contextualEmotion = [...lines]
-    .reverse()
-    .find((line) => line !== directEmotion && !/직접 드러난 감정:/u.test(line));
-  return compact([directEmotion, contextualEmotion].filter(Boolean).join(" "), 280) || null;
-}
-
-function visibleFlow(interpretation: DreamInterpretation) {
-  if (!interpretation.hasNarrativeFlow) return null;
-  const stages = interpretation.flow
-    .split(/\n+/)
-    .map((line) => line.trim())
-    .filter((line) => /^(?:시작|변화|마지막):/u.test(line))
-    .slice(0, 3);
-  if (stages.length < 2) return null;
-  return compact(stages.join(" → "), 320);
+function unique<T>(values: T[], key: (value: T) => string) {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const normalized = key(value)
+      .normalize("NFKC")
+      .replace(/\s+/gu, "")
+      .toLocaleLowerCase("ko-KR");
+    if (!normalized || seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
 }
 
 export function buildDreamResultPresentation(
-  interpretation: DreamInterpretation
+  interpretation: DreamInterpretation,
 ): DreamResultPresentation {
-  const questions = uniqueTexts(
-    interpretation.reflectionPoints
-      .map((point) => point.replace(/^[•\-]\s*/u, "").trim())
-      .filter((point) => point.endsWith("?"))
-  ).slice(0, 3);
+  const keyScenes = unique(
+    interpretation.keyScenes.slice(0, 4),
+    (scene) => `${scene.title}:${scene.evidence}`,
+  ).map((scene) => ({
+    title: compact(scene.title, 80),
+    evidence: compact(scene.evidence, 180),
+    generalMeaning: compact(scene.generalMeaning, 200),
+    specificMeaning: compact(scene.specificMeaning, 350),
+    connection: compact(scene.connection, 200),
+  }));
 
   return {
-    summary: compact(interpretation.summary, 180),
-    interpretationParagraphs: paragraphs(interpretation.interpretation).slice(0, 3),
-    scenes: interpretation.symbols.slice(0, 3).map((symbol) => ({
-      name: compact(symbol.name, 80),
-      meaning: compact(symbol.meaning, 240),
-    })),
-    emotion: visibleEmotion(interpretation),
-    flow: visibleFlow(interpretation),
-    thoughtPoints: questions.length
-      ? questions
-      : ["이 꿈에서 가장 오래 남은 장면은 무엇이며, 왜 그 부분이 마음에 남았나요?"],
+    notice: compact(interpretation.notice, 240),
+    coreMeaning: compact(interpretation.coreMeaning, 220),
+    keyScenes,
+    overallDirection: compact(interpretation.overallDirection, 120),
+    interpretationParagraphs: interpretation.integratedInterpretation
+      .split(/\n\s*\n/gu)
+      .map((paragraph) => paragraph.replace(/\s+/gu, " ").trim())
+      .filter(Boolean)
+      .slice(0, 4),
+    realLifeConnections: unique(
+      interpretation.realLifeConnections.slice(0, 3),
+      (item) => item,
+    ).map((item) => compact(item, 190)),
+    reflectionQuestion: compact(interpretation.reflectionQuestion, 150),
     caution: compact(interpretation.caution, 180),
   };
 }
 
 export function countVisibleResultCharacters(result: DreamResultPresentation) {
   return [
-    result.summary,
+    result.notice,
+    result.coreMeaning,
+    ...result.keyScenes.flatMap((scene) => [
+      scene.title,
+      scene.generalMeaning,
+      scene.specificMeaning,
+      scene.connection,
+    ]),
+    result.overallDirection,
     ...result.interpretationParagraphs,
-    ...result.scenes.flatMap((scene) => [scene.name, scene.meaning]),
-    result.emotion ?? "",
-    result.flow ?? "",
-    ...result.thoughtPoints,
+    ...result.realLifeConnections,
+    result.reflectionQuestion,
     result.caution,
   ].join("").length;
 }

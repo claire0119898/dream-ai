@@ -8,7 +8,12 @@
     "start": "next start",
     "lint": "eslint",
     "test:scenes": "node --no-warnings --experimental-strip-types scripts/verify-scene-analysis.mjs",
-    "test:result": "node --no-warnings --experimental-strip-types scripts/verify-result-presentation.mjs"
+    "test:result": "node --no-warnings --experimental-strip-types scripts/verify-result-presentation.mjs",
+    "validate:dreams": "node scripts/validate-dream-dictionary.mjs",
+    "check:copy": "node scripts/check-korean-copy.mjs",
+    "check:duplicates": "node scripts/check-dream-duplicates.mjs",
+    "verify:relations": "node --no-warnings --experimental-strip-types scripts/verify-dream-relations.mjs",
+    "verify:content": "node --no-warnings --experimental-strip-types scripts/verify-dream-content.mjs"
   },
   "dependencies": {
     "next": "16.2.10",

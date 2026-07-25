@@ -22,8 +22,8 @@ export const ENRICHMENT_TIMEOUT_MS = positiveInteger(
 );
 export const ENRICHMENT_MAX_OUTPUT_TOKENS = positiveInteger(
   ["DREAM_MAX_OUTPUT_TOKENS", "EXTERNAL_API_MAX_OUTPUT_TOKENS"],
-  2400,
-  3000
+  3000,
+  4000
 );
 export const DREAM_CONTEXT_ENTRY_LIMIT = positiveInteger(
   ["DREAM_CONTEXT_ENTRY_LIMIT"],
