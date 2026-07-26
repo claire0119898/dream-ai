@@ -34,7 +34,7 @@ npm run dev
 - `GOOGLE_SITE_VERIFICATION`: Search Console HTML 태그 인증에서 받은 `content` 값입니다.
 - `DREAM_INTERPRETATION_MODE`: `ai-first`, `hybrid`, `dictionary-only` 중 하나입니다.
 - `DREAM_MAX_OUTPUT_TOKENS`, `DREAM_REQUEST_TIMEOUT_MS`, `DREAM_CONTEXT_ENTRY_LIMIT`: 결과 길이, 제한 시간, 참고 사전 수를 제어합니다. 현재 기본값은 각각 `3000`, `30000`, `8`입니다.
-- 결과 캐시는 `jamgyeol:interpretation:v8:{dreamHash}` 형식으로 구분해 이전의 추상적인 풀이를 다시 사용하지 않습니다.
+- 결과 캐시는 `jamgyeol:interpretation:v9:{dreamHash}` 형식으로 구분하며, 값에도 `facts-v1` 스키마와 `grounded-v1` 지침 버전을 함께 기록해 사실 검증 이전의 풀이를 다시 사용하지 않습니다.
 - 꿈풀이 캐시는 결과 구조 버전 `v7`을 사용합니다. 이전 구조의 캐시는 새 결과 화면에 재사용되지 않으며 꿈 원문은 캐시 키에 포함되지 않습니다.
 - `DREAM_RATE_LIMIT_PER_MINUTE`, `DREAM_RATE_LIMIT_PER_HOUR`, `DREAM_RATE_LIMIT_PER_DAY`, `DREAM_GLOBAL_DAILY_LIMIT`: 사용자 및 사이트 전체 호출 한도입니다.
 - `DREAM_CACHE_TTL_SECONDS`: 동일 꿈 풀이 결과의 해시 기반 단기 캐시 시간입니다.

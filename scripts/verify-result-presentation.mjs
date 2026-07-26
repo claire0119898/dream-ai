@@ -1,4 +1,5 @@
 import { buildDreamRequestContext } from "../lib/dreamContext.ts";
+import { extractDreamFacts } from "../lib/dreamFacts.ts";
 import {
   createDictionaryInterpretation,
   validateContextualInterpretation,
@@ -73,7 +74,12 @@ const cases = [
 
 const summaries = cases.map((testCase) => {
   const context = buildDreamRequestContext(testCase.dream, emptyAnalysis, 8);
-  const interpretation = createDictionaryInterpretation(emptyAnalysis, context);
+  const facts = extractDreamFacts(testCase.dream, context);
+  const interpretation = createDictionaryInterpretation(
+    emptyAnalysis,
+    context,
+    facts,
+  );
   const contextualCandidate = Object.fromEntries(
     Object.entries(interpretation).filter(([key]) => key !== "title"),
   );
@@ -82,6 +88,7 @@ const summaries = cases.map((testCase) => {
       contextualCandidate,
       testCase.dream,
       context,
+      facts,
     ).ok,
     `${testCase.name}: 구체 명사를 보존한 구조화 결과가 품질 검사를 통과해야 합니다.`,
   );
@@ -180,9 +187,14 @@ const abstractContext = buildDreamRequestContext(
   emptyAnalysis,
   8,
 );
+const abstractFacts = extractDreamFacts(abstractDream, abstractContext);
 const abstractCandidate = Object.fromEntries(
   Object.entries(
-    createDictionaryInterpretation(emptyAnalysis, abstractContext),
+    createDictionaryInterpretation(
+      emptyAnalysis,
+      abstractContext,
+      abstractFacts,
+    ),
   ).filter(([key]) => key !== "title"),
 );
 const rejectedAbstract = validateContextualInterpretation(
@@ -193,6 +205,7 @@ const rejectedAbstract = validateContextualInterpretation(
   },
   abstractDream,
   abstractContext,
+  abstractFacts,
 );
 assert(
   !rejectedAbstract.ok && rejectedAbstract.code === "quality_rejected",

@@ -43,6 +43,7 @@ export type DreamAnalysis = {
 
 export interface DreamInterpretation {
   title: string;
+  factVersion: "v1";
   coreConclusion: string;
   dreamType: "single_scene" | "multi_scene";
   keyScenes: Array<{
@@ -55,9 +56,15 @@ export interface DreamInterpretation {
   realLifeConnections: string[];
   reflectionQuestions: string[];
   caution: string;
+  grounding: Array<{
+    field: string;
+    sentence: string;
+    factIds: string[];
+  }>;
 }
 
 export interface ContextualDreamInterpretation {
+  factVersion: "v1";
   coreConclusion: string;
   dreamType: "single_scene" | "multi_scene";
   keyScenes: Array<{
@@ -70,4 +77,16 @@ export interface ContextualDreamInterpretation {
   realLifeConnections: string[];
   reflectionQuestions: string[];
   caution: string;
+  grounding: Array<{
+    field: string;
+    sentence: string;
+    factIds: string[];
+  }>;
 }
+
+export type DreamClarification = {
+  key: string;
+  title: string;
+  message: string;
+  statements: string[];
+};

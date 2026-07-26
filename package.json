@@ -12,7 +12,10 @@
     "validate:dreams": "node scripts/validate-dream-dictionary.mjs",
     "check:copy": "node scripts/check-korean-copy.mjs",
     "check:duplicates": "node scripts/check-dream-duplicates.mjs",
-    "verify:relations": "node --no-warnings --experimental-strip-types scripts/verify-dream-relations.mjs",
+    "verify:grounding": "node --no-warnings --experimental-strip-types scripts/verify-input-grounding.mjs",
+    "verify:relations": "node --no-warnings --experimental-strip-types scripts/verify-entity-relations.mjs",
+    "verify:transformations": "node --no-warnings --experimental-strip-types scripts/verify-transformations.mjs",
+    "verify:interpretation-facts": "node --no-warnings --experimental-strip-types scripts/verify-interpretation-facts.mjs",
     "verify:content": "node --no-warnings --experimental-strip-types scripts/verify-dream-content.mjs"
   },
   "dependencies": {

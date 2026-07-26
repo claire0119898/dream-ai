@@ -17,7 +17,15 @@ type ReserveInput = {
 };
 
 type MemoryEntry = { count: number; expiresAt: number };
-type MemoryCacheEntry = { interpretation: DreamInterpretation; expiresAt: number };
+type InterpretationCacheEnvelope = {
+  schemaVersion: "facts-v1";
+  promptVersion: "grounded-v1";
+  interpretation: DreamInterpretation;
+};
+type MemoryCacheEntry = {
+  envelope: InterpretationCacheEnvelope;
+  expiresAt: number;
+};
 
 export interface ExternalUsageStore {
   reserve(input: ReserveInput): Promise<UsageDecision>;
@@ -49,7 +57,29 @@ function limiterKeys(input: ReserveInput) {
 }
 
 function interpretationCacheKey(dreamHash: string) {
-  return `jamgyeol:interpretation:v8:${dreamHash}`;
+  return `jamgyeol:interpretation:v9:${dreamHash}`;
+}
+
+function cacheEnvelope(
+  interpretation: DreamInterpretation,
+): InterpretationCacheEnvelope {
+  return {
+    schemaVersion: "facts-v1",
+    promptVersion: "grounded-v1",
+    interpretation,
+  };
+}
+
+function cachedInterpretation(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const envelope = value as Partial<InterpretationCacheEnvelope>;
+  if (
+    envelope.schemaVersion !== "facts-v1" ||
+    envelope.promptVersion !== "grounded-v1"
+  ) {
+    return null;
+  }
+  return validateCachedInterpretation(envelope.interpretation);
 }
 
 export class MemoryExternalUsageStore implements ExternalUsageStore {
@@ -93,12 +123,12 @@ export class MemoryExternalUsageStore implements ExternalUsageStore {
       this.interpretations.delete(dreamHash);
       return null;
     }
-    return entry.interpretation;
+    return entry.envelope;
   }
 
   async setCached(dreamHash: string, interpretation: DreamInterpretation) {
     this.interpretations.set(dreamHash, {
-      interpretation,
+      envelope: cacheEnvelope(interpretation),
       expiresAt: Date.now() + EXTERNAL_USAGE_LIMITS.duplicateSeconds * 1000,
     });
   }
@@ -226,7 +256,7 @@ class UpstashExternalUsageStore implements ExternalUsageStore {
     await this.command([
       "SET",
       interpretationCacheKey(dreamHash),
-      JSON.stringify(interpretation),
+      JSON.stringify(cacheEnvelope(interpretation)),
       "EX",
       String(EXTERNAL_USAGE_LIMITS.duplicateSeconds),
     ]);
@@ -285,7 +315,7 @@ export async function getCachedInterpretation(dream: string): Promise<DreamInter
   if (!store) return null;
   try {
     const cached = await store.getCached(hashPrivateValue(normalizedDreamFingerprint(dream)));
-    return validateCachedInterpretation(cached);
+    return cachedInterpretation(cached);
   } catch {
     return null;
   }

@@ -11,6 +11,13 @@ import {
 import { buildDreamRequestContext, type DreamRequestContext } from "../../../lib/dreamContext";
 import { analyzeDream, needsContextEnrichment, validateDreamInput } from "../../../lib/dreamEngine";
 import {
+  extractDreamFacts,
+  validateExtractedFacts,
+  validateInterpretationFacts,
+  type DreamFactExtraction,
+  type FactValidationIssue,
+} from "../../../lib/dreamFacts";
+import {
   DEFAULT_INTERPRETATION_CAUTION,
   createDictionaryInterpretation,
   mergeInterpretations,
@@ -23,7 +30,10 @@ import {
 } from "../../../lib/externalUsageLimiter";
 import type { ContextualDreamInterpretation } from "../../../types/dream";
 
-type InterpretRequestBody = { dream?: unknown };
+type InterpretRequestBody = {
+  dream?: unknown;
+  clarificationKey?: unknown;
+};
 type InterpretationReasonCode =
   | "external_success"
   | "missing_api_key"
@@ -33,7 +43,18 @@ type InterpretationReasonCode =
   | "invalid_response"
   | "quality_rejected"
   | "provider_error"
-  | "dictionary_only_mode";
+  | "dictionary_only_mode"
+  | "parse_success"
+  | "parse_ambiguous"
+  | "entity_mismatch"
+  | "relation_mismatch"
+  | "quantity_mismatch"
+  | "transformation_mismatch"
+  | "unsupported_inference"
+  | "response_grounding_failed"
+  | "clarification_required"
+  | "interpretation_success"
+  | "fallback_used";
 type ContextualRequestResult =
   | { ok: true; value: ContextualDreamInterpretation }
   | {
@@ -46,6 +67,7 @@ const interpretationSchema = {
   type: "object",
   additionalProperties: false,
   required: [
+    "factVersion",
     "coreConclusion",
     "dreamType",
     "keyScenes",
@@ -55,8 +77,10 @@ const interpretationSchema = {
     "realLifeConnections",
     "reflectionQuestions",
     "caution",
+    "grounding",
   ],
   properties: {
+    factVersion: { type: "string", enum: ["v1"] },
     coreConclusion: { type: "string", pattern: "^.{100,180}$" },
     dreamType: {
       type: "string",
@@ -92,6 +116,26 @@ const interpretationSchema = {
       items: { type: "string", pattern: "^.{15,170}\\?$" },
     },
     caution: { type: "string", enum: [DEFAULT_INTERPRETATION_CAUTION] },
+    grounding: {
+      type: "array",
+      minItems: 1,
+      maxItems: 40,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["field", "sentence", "factIds"],
+        properties: {
+          field: { type: "string", pattern: "^.{2,80}$" },
+          sentence: { type: "string", pattern: "^[\\s\\S]{2,300}$" },
+          factIds: {
+            type: "array",
+            minItems: 1,
+            maxItems: 10,
+            items: { type: "string", pattern: "^[a-z]+_[0-9]+$" },
+          },
+        },
+      },
+    },
   },
 } as const;
 
@@ -100,7 +144,7 @@ const INTERPRETATION_INSTRUCTIONS = `당신은 사용자가 적은 인물, 물�
 
 - coreConclusion의 첫 문장에서 이 꿈이 무엇에 관한 꿈인지 직접 결론을 말하세요. 100~180자의 2~3문장으로 쓰고 “이 꿈은” 또는 “이 꿈의 중심은”으로 시작하세요.
 - 사용자가 입력한 인물, 물건, 행동, 대사는 실제 명칭으로 유지하세요. 친정아버지를 “한 인물”, 남편을 “상대”, 은팔찌를 “물건”, 건넨 일을 “행동”으로 일반화하지 마세요.
-- dreamType은 sceneFrames가 한 사건이면 single_scene, 서로 다른 사건이 이어지면 multi_scene으로 정하세요.
+- dreamType은 facts의 actions와 transformations가 합쳐서 한 사건이면 single_scene, 서로 다른 사건이 이어지면 multi_scene으로 정하세요.
 - single_scene에는 억지로 시작·변화·마지막·이후 흐름을 만들지 마세요. 누가 누구에게 무엇을 왜 어떤 방식으로 했는지와 소유 맥락을 중심으로 해석하세요.
 - keyScenes는 single_scene이면 2~3개, multi_scene이면 2~4개를 고르세요. title에는 실제 인물·물건·행동·대사를 넣고, meaning은 그 구체적인 사실이 뜻하는 바를 1~2문장으로 설명하세요.
 - relationshipMeaning에는 누가 누구에게 무엇을 했는지 방향을 분명히 쓰세요. 관계 인물이 없으면 빈 문자열을 반환하세요.
@@ -116,6 +160,11 @@ const INTERPRETATION_INSTRUCTIONS = `당신은 사용자가 적은 인물, 물�
 - “전달이 한 관계에서 다른 관계로”, “한 인물의 행동이 이후 흐름을”, “꿈속의 인물과 상대”, “처음의 관계가 마지막 장면에서” 같은 의미 없는 메타 문장은 쓰지 마세요.
 - coreConclusion, keyScenes, integratedInterpretation, realLifeConnections, reflectionQuestions 사이에서 같은 문장을 반복하지 마세요.
 - 참고 사전은 빠진 상징을 확인하는 보조 자료일 뿐이며 문장을 복사하지 마세요. caution은 스키마의 고정 문구를 그대로 사용하세요.
+- 해석하기 전에 제공된 facts만 읽으세요. facts에 없는 인물, 사물, 수량, 행동, 대사, 감정, 장소, 결말을 절대 추가하지 마세요.
+- 사용자 문장이 어색하더라도 자연스러운 이야기로 임의 완성하지 마세요. 무엇이 무엇으로 변했는지, 누가 누구에게 무엇을 했는지, 누가 무엇을 소유했는지를 facts 그대로 유지하세요.
+- facts의 uncertainPhrases는 해석 근거로 사용하지 마세요. 장면을 더 극적이거나 의미 있어 보이게 만들기 위해 사건을 추가하지 마세요.
+- factVersion은 반드시 v1입니다. grounding에는 결과의 모든 구체적인 문장을 sentence에 그대로 복사하고, 그 문장을 뒷받침하는 facts의 id를 factIds에 1개 이상 넣으세요.
+- grounding의 sentence는 결과 필드에 실제로 존재해야 합니다. 근거 id가 없는 구체적인 문장을 작성하지 마세요.
 - HTML, 마크다운, 기술적인 처리 방식은 출력하지 말고 지정된 JSON 구조만 반환하세요.`;
 
 function json(data: unknown, status = 200) {
@@ -141,36 +190,21 @@ function shouldRequestContextualInterpretation(
   return true;
 }
 
-function providerInput(dream: string, context: DreamRequestContext) {
+function providerInput(
+  facts: DreamFactExtraction,
+  context: DreamRequestContext,
+) {
   return JSON.stringify({
-    task: "실제 인물·물건·행동·대사를 보존하고 결론부터 말하는 꿈풀이를 작성하세요.",
-    untrustedDreamText: dream,
-    selectedKeyScenes: context.keyScenes,
-    sceneFrames: context.scenes,
-    events: context.events,
-    relationships: context.relationships,
-    ownershipSignals: context.ownershipSignals,
-    dialogueActs: context.dialogueActs,
-    narrativeFlow: context.eventFlow,
-    emotionAndSituationContrasts: context.contrasts,
-    repeatedScenes: context.repeatedScenes,
-    unexpectedEnding: context.unexpectedEnding,
+    task: "검증된 사실만 사용해 결론부터 말하는 꿈풀이를 작성하세요.",
+    facts,
     supportingDictionaryOnly: context.dictionaryEntries,
-    characters: context.characters,
-    places: context.places,
-    detectedSymbols: context.symbols,
-    detectedActions: context.actions,
-    detectedStates: context.states,
-    detectedEmotions: context.emotions,
-    directlyExpressedEmotions: context.expressedEmotions,
-    detectedSituationsAndActions: context.situations,
-    symbolRelationships: context.symbolRelationships,
   });
 }
 
 async function requestContextualInterpretation(
   dream: string,
-  context: DreamRequestContext
+  context: DreamRequestContext,
+  facts: DreamFactExtraction,
 ): Promise<ContextualRequestResult> {
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const controller = new AbortController();
@@ -181,7 +215,7 @@ async function requestContextualInterpretation(
       {
         model: process.env.OPENAI_DREAM_MODEL || DEFAULT_DREAM_MODEL,
         instructions: INTERPRETATION_INSTRUCTIONS,
-        input: providerInput(dream, context),
+        input: providerInput(facts, context),
         text: {
           format: {
             type: "json_schema",
@@ -213,7 +247,12 @@ async function requestContextualInterpretation(
       return { ok: false, code: "invalid_response" };
     }
 
-    const validation = validateContextualInterpretation(parsed, dream, context);
+    const validation = validateContextualInterpretation(
+      parsed,
+      dream,
+      context,
+      facts,
+    );
     return validation;
   } catch (error) {
     const requestError = error as Error;
@@ -224,6 +263,20 @@ async function requestContextualInterpretation(
   } finally {
     if (timeout) clearTimeout(timeout);
   }
+}
+
+function groundingReason(detail?: string): InterpretationReasonCode {
+  const allowed: FactValidationIssue[] = [
+    "entity_mismatch",
+    "relation_mismatch",
+    "quantity_mismatch",
+    "transformation_mismatch",
+    "unsupported_inference",
+    "response_grounding_failed",
+  ];
+  return allowed.includes(detail as FactValidationIssue)
+    ? (detail as InterpretationReasonCode)
+    : "quality_rejected";
 }
 
 export async function POST(request: Request) {
@@ -244,30 +297,59 @@ export async function POST(request: Request) {
 
   const analysis = analyzeDream(dream);
   const context = buildDreamRequestContext(dream, analysis, DREAM_CONTEXT_ENTRY_LIMIT);
-  const dictionary = createDictionaryInterpretation(analysis, context);
+  const clarificationKey =
+    typeof body.clarificationKey === "string"
+      ? body.clarificationKey.slice(0, 80)
+      : undefined;
+  const facts = extractDreamFacts(dream, context, clarificationKey);
+  const factValidation = validateExtractedFacts(dream, facts);
+
+  if (!factValidation.ok) {
+    logInterpretationOutcome(factValidation.issue);
+    logInterpretationOutcome("fallback_used");
+    const fallback = createDictionaryInterpretation(analysis, context, facts);
+    return json({ interpretation: fallback });
+  }
+
+  if (facts.ambiguityLevel === "high" && facts.clarification) {
+    logInterpretationOutcome("parse_ambiguous");
+    logInterpretationOutcome("clarification_required");
+    return json({
+      status: "clarification_required",
+      clarification: facts.clarification,
+    });
+  }
+
+  logInterpretationOutcome("parse_success");
+  const dictionary = createDictionaryInterpretation(analysis, context, facts);
   const shouldRequest = shouldRequestContextualInterpretation(dream, analysis);
 
   if (!shouldRequest) {
     logInterpretationOutcome("dictionary_only_mode");
+    logInterpretationOutcome("fallback_used");
     return json({ interpretation: dictionary });
   }
 
   if (!process.env.OPENAI_API_KEY) {
     logInterpretationOutcome("missing_api_key");
+    logInterpretationOutcome("fallback_used");
     return json({ interpretation: dictionary });
   }
 
   const cached = await getCachedInterpretation(dream);
-  if (cached) {
+  if (cached && validateInterpretationFacts(cached, facts).ok) {
     logInterpretationOutcome("cache_hit");
+    logInterpretationOutcome("interpretation_success");
     return json({ interpretation: cached });
   }
+  if (cached) logInterpretationOutcome("response_grounding_failed");
 
   // 호출 직전에 사용자·전체 한도와 동일 꿈 재요청을 원자적으로 확인합니다.
   // 허용된 시도는 성공 여부와 관계없이 기록하며, 한 요청에서는 재시도하지 않습니다.
   const usageDecision = await reserveExternalAttempt(request, dream);
   if (usageDecision !== "allowed") {
     logInterpretationOutcome("rate_limited");
+    logInterpretationOutcome("fallback_used");
     return json({
       interpretation: dictionary,
       notice:
@@ -277,15 +359,31 @@ export async function POST(request: Request) {
     });
   }
 
-  const contextual = await requestContextualInterpretation(dream, context);
+  const contextual = await requestContextualInterpretation(
+    dream,
+    context,
+    facts,
+  );
 
   if (!contextual.ok) {
-    logInterpretationOutcome(contextual.code);
+    logInterpretationOutcome(
+      contextual.code === "quality_rejected"
+        ? groundingReason(contextual.detail)
+        : contextual.code,
+    );
+    logInterpretationOutcome("fallback_used");
     return json({ interpretation: dictionary });
   }
 
   const interpretation = mergeInterpretations(dictionary, contextual.value, analysis.emotions);
+  const finalValidation = validateInterpretationFacts(interpretation, facts);
+  if (!finalValidation.ok) {
+    logInterpretationOutcome(finalValidation.issue);
+    logInterpretationOutcome("fallback_used");
+    return json({ interpretation: dictionary });
+  }
   await cacheInterpretation(dream, interpretation);
   logInterpretationOutcome("external_success");
+  logInterpretationOutcome("interpretation_success");
   return json({ interpretation });
 }

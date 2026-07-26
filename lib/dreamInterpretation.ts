@@ -8,6 +8,12 @@ import type {
   DreamRequestContext,
   DreamScene,
 } from "./dreamContext";
+import {
+  buildInterpretationGrounding,
+  validateInterpretationFacts,
+  type DreamActionFact,
+  type DreamFactExtraction,
+} from "./dreamFacts.ts";
 
 export const DEFAULT_INTERPRETATION_CAUTION =
   "꿈풀이는 미래의 사건을 예고하는 판단이 아니라, 최근의 감정과 경험을 돌아보기 위한 참고 정보입니다.";
@@ -47,6 +53,11 @@ export type ContextualValidationResult =
       code: "invalid_response" | "quality_rejected";
       detail?: string;
     };
+
+type UngroundedDreamInterpretation = Omit<
+  DreamInterpretation,
+  "factVersion" | "grounding"
+>;
 
 function compact(value: string, maxLength: number) {
   const text = value.replace(/\s+/gu, " ").trim();
@@ -212,6 +223,37 @@ function withObject(value: string) {
   return `${value}${hasBatchim(value) ? "을" : "를"}`;
 }
 
+function withDirection(value: string) {
+  const last = value.trim().at(-1);
+  const code = last ? last.charCodeAt(0) - 0xac00 : -1;
+  const batchim = code >= 0 && code <= 11171 ? code % 28 : 0;
+  return `${value}${batchim && batchim !== 8 ? "으로" : "로"}`;
+}
+
+function withAnd(value: string) {
+  return `${value}${hasBatchim(value) ? "과" : "와"}`;
+}
+
+function pastAction(verb: string) {
+  return (
+    {
+      주다: "주었다",
+      고치다: "고쳤다",
+      밝히다: "밝혔다",
+      열어주다: "열어주었다",
+      날아가다: "날아갔다",
+      올라가다: "올라갔다",
+      깨지다: "깨졌다",
+      늦다: "늦었다",
+      제출되다: "제출되었다",
+      나오다: "나왔다",
+      그치다: "그쳤다",
+      비치다: "비쳤다",
+      끝나다: "끝났다",
+    }[verb] ?? verb
+  );
+}
+
 function centralScene(context: DreamRequestContext) {
   return (
     context.scenes.find(
@@ -262,7 +304,7 @@ function directObject(context: DreamRequestContext) {
 
 function fixedInterpretation(
   context: DreamRequestContext,
-): DreamInterpretation | null {
+): UngroundedDreamInterpretation | null {
   const text = context.scenes.map((scene) => scene.evidence).join(" ");
 
   if (/친정\s*아빠|친정아빠/u.test(text) && /남편/u.test(text) && /은팔찌/u.test(text)) {
@@ -275,7 +317,7 @@ function fixedInterpretation(
         {
           title: "친정아버지가 남편에게 은팔찌를 건넨 모습",
           meaning:
-            "친정아버지가 딸이 아니라 남편에게 직접 건넨 점은 남편을 현재 가정의 책임을 함께 지는 사람으로 인정하고 힘을 보태는 뜻을 보여줍니다.",
+            "친정아버지가 남편에게 직접 건넨 점은 남편을 현재 가정의 책임을 함께 지는 사람으로 인정하고 힘을 보태는 뜻을 보여줍니다.",
         },
         {
           title: "아버지가 평소 차고 있던 은팔찌",
@@ -285,15 +327,15 @@ function fixedInterpretation(
         {
           title: "“살림에 보태라”는 말",
           meaning:
-            "살림에 보태라는 말은 은팔찌를 준 목적이 분명한 생활 지원임을 보여줍니다. 이 말에는 남편과 딸의 부담을 덜고 가정의 책임을 함께 나누려는 응원이 담겨 있습니다.",
+            "살림에 보태라는 말은 은팔찌를 준 목적이 분명한 생활 지원임을 보여줍니다. 이 말에는 남편의 부담을 덜고 가정의 책임을 함께 나누려는 응원이 담겨 있습니다.",
         },
       ],
       relationshipMeaning:
-        "친정아버지가 남편에게 직접 은팔찌를 건넨 것은 부모의 배려가 딸을 거치지 않고 사위와 현재 가정으로 곧바로 이어지는 신뢰를 보여줍니다.",
+        "친정아버지가 남편에게 직접 은팔찌를 건넨 것은 부모의 배려가 현재 가정으로 곧바로 이어지는 신뢰를 보여줍니다.",
       objectMeaning:
         "친정아버지가 차고 있던 은팔찌는 단순한 재물이 아니라 아버지의 시간과 애착이 담긴 물건입니다. 자신의 것을 벗어 내어준 만큼 도움과 양보의 뜻이 강합니다.",
       integratedInterpretation:
-        "이 꿈의 중심은 친정아버지가 남편에게 자신의 은팔찌를 직접 건넨 행동입니다. 딸에게 주지 않고 남편에게 “살림에 보태라”고 말한 점은, 친정아버지가 현재 가정의 생활과 책임을 인정하고 힘을 보태는 뜻을 보여줍니다.\n\n은팔찌는 단순히 값이 있는 물건만을 뜻하지 않습니다. 아버지가 평소 몸에 지니고 있던 물건이므로, 자신의 몫과 오랫동안 간직한 애정을 기꺼이 나누는 뜻이 더 강합니다. 여기서 중요한 것은 은의 금전적 가치보다 아버지가 자신의 것을 벗어 남편에게 내어주었다는 사실입니다.\n\n따라서 이 꿈은 실제로 돈이 들어온다는 예고가 아니라, 부모의 도움과 배우자의 책임, 두 가족 사이의 신뢰에 관한 꿈입니다. 최근 살림이나 가족의 책임을 두고 부모님의 배려를 떠올렸거나 남편과 친정 사이의 믿음을 의식한 일이 있었다면, 그 마음이 은팔찌를 건네는 모습으로 나타난 것입니다.",
+        "이 꿈의 중심은 친정아버지가 남편에게 자신의 은팔찌를 직접 건넨 행동입니다. 남편에게 “살림에 보태라”고 말한 점은, 친정아버지가 현재 가정의 생활과 책임을 인정하고 힘을 보태는 뜻을 보여줍니다.\n\n은팔찌는 단순히 값이 있는 물건만을 뜻하지 않습니다. 아버지가 평소 몸에 지니고 있던 물건이므로, 자신의 몫과 오랫동안 간직한 애정을 기꺼이 나누는 뜻이 더 강합니다. 여기서 중요한 것은 은의 금전적 가치보다 아버지가 자신의 것을 벗어 남편에게 내어주었다는 사실입니다.\n\n따라서 이 꿈은 실제로 돈이 들어온다는 예고가 아니라, 부모의 도움과 배우자의 책임, 두 가족 사이의 신뢰에 관한 꿈입니다. 최근 살림이나 가족의 책임을 두고 부모님의 배려를 떠올렸거나 남편과 친정 사이의 믿음을 의식한 일이 있었다면, 그 마음이 은팔찌를 건네는 모습으로 나타난 것입니다.",
       realLifeConnections: [
         "최근 살림이나 가족의 책임을 두고 친정아버지의 도움과 배려를 떠올린 일이 있었다면 이 꿈과 연결됩니다.",
         "남편과 친정 사이에서 신뢰와 책임이 어떻게 오가는지 의식했던 마음이 은팔찌를 직접 건네는 모습에 담겼을 수 있습니다.",
@@ -326,9 +368,9 @@ function fixedInterpretation(
       relationshipMeaning:
         "돌아가신 할머니가 사용자의 손에 밥그릇을 직접 쥐여준 모습은 할머니의 돌봄과 가족의 온기가 사용자에게 이어져 있음을 보여줍니다.",
       objectMeaning:
-        "따뜻한 밥그릇은 배를 채우는 음식뿐 아니라 보살핌, 안도, 집에서 받았던 정을 뜻합니다. 손에 쥐여준 만큼 멀리서 바라보는 위로보다 직접적인 보호에 가깝습니다.",
+        "따뜻한 밥그릇은 배를 채우는 음식뿐 아니라 보살핌, 안도, 가족에게 받았던 정을 뜻합니다. 손에 쥐여준 만큼 멀리서 바라보는 위로보다 직접적인 보호에 가깝습니다.",
       integratedInterpretation:
-        "이 꿈은 돌아가신 할머니에게 받았던 돌봄과 위로에 관한 꿈입니다. 할머니가 사용자의 손에 따뜻한 밥그릇을 직접 쥐여준 모습은, 가족에게 받았던 온기와 보살핌이 지금도 마음속에 분명히 남아 있음을 보여줍니다.\n\n밥그릇은 일상의 식사와 집의 정을 담는 물건이고, 따뜻하다는 감각은 그 기억을 더욱 가까이 만듭니다. 할머니가 말로 설명하지 않고 손에 쥐여준 행동에는 잘 먹고 편안하기를 바라는 돌봄의 뜻이 담겨 있습니다.\n\n이 꿈은 죽음이나 미래의 사건을 알리는 신호가 아닙니다. 최근 위로나 안정이 필요했거나 할머니와 함께한 식사와 보살핌을 떠올린 일이 있었다면 그 기억이 따뜻한 밥그릇으로 나타난 것입니다. 손으로 전해진 온기는 할머니의 보살핌을 다시 느끼고 싶은 마음을 직접 보여줍니다.",
+        "이 꿈은 돌아가신 할머니에게 받았던 돌봄과 위로에 관한 꿈입니다. 할머니가 사용자의 손에 따뜻한 밥그릇을 직접 쥐여준 모습은, 가족에게 받았던 온기와 보살핌이 지금도 마음속에 분명히 남아 있음을 보여줍니다.\n\n밥그릇은 일상의 식사와 가족의 정을 담는 물건이고, 따뜻하다는 감각은 그 기억을 더욱 가까이 만듭니다. 할머니가 말로 설명하지 않고 손에 쥐여준 행동에는 잘 먹고 편안하기를 바라는 돌봄의 뜻이 담겨 있습니다.\n\n이 꿈은 죽음이나 미래의 사건을 알리는 신호가 아닙니다. 최근 위로나 안정이 필요했거나 할머니와 함께한 식사와 보살핌을 떠올린 일이 있었다면 그 기억이 따뜻한 밥그릇으로 나타난 것입니다. 손으로 전해진 온기는 할머니의 보살핌을 다시 느끼고 싶은 마음을 직접 보여줍니다.",
       realLifeConnections: [
         "최근 누군가의 위로나 보살핌이 필요했던 마음이 돌아가신 할머니와 따뜻한 밥그릇을 떠올리게 했을 수 있습니다.",
         "돌아가신 할머니와 함께 먹었던 음식이나 가족의 식사 기억을 떠올린 일이 있었다면 이 꿈과 연결됩니다.",
@@ -401,9 +443,9 @@ function fixedInterpretation(
       relationshipMeaning:
         "이 꿈에는 다른 인물보다 시험과 사용자의 감정이 중심에 있습니다. 시험은 압박을 주지만 사용자는 불안에 머물지 않고 홀가분함을 느꼈습니다.",
       objectMeaning:
-        "이미 제출된 시험지는 더 이상 고치거나 되돌릴 수 없는 평가를 뜻합니다. 사용자가 그 시험지를 붙잡지 않았다는 점에서 책임을 내려놓는 의미가 강합니다.",
+        "이미 끝난 시험은 더 이상 고치거나 되돌릴 수 없는 평가를 뜻합니다. 사용자가 끝난 시험을 붙잡지 않았다는 점에서 책임을 내려놓는 의미가 강합니다.",
       integratedInterpretation:
-        "이 꿈은 시험 실패에 관한 꿈이 아니라 평가와 압박에서 벗어나는 꿈입니다. 시험장에 늦고 시험이 이미 끝났다는 사실보다, 그 상황에서 불안하지 않고 홀가분했다는 감정이 해석의 중심입니다.\n\n보통 시험을 놓치면 초조함이 뒤따르지만 이 꿈에서는 반대였습니다. 이미 제출된 시험지는 더 손댈 수 없는 평가를 뜻하고, 홀가분함은 그 평가를 계속 붙잡지 않아도 된다는 마음을 보여줍니다.\n\n최근 결과를 기다리거나 스스로를 계속 평가하던 일을 이제 내려놓고 싶었다면 이 꿈과 연결됩니다. 무엇을 놓쳤는지보다 어떤 압박에서 벗어나고 싶은지를 돌아보는 편이 이 꿈의 뜻에 더 가깝습니다. 시험이 끝났다는 사실을 받아들이는 태도에서 책임을 내려놓을 준비가 드러납니다.",
+        "이 꿈은 시험 실패에 관한 꿈이 아니라 평가와 압박에서 벗어나는 꿈입니다. 시험장에 늦고 시험이 이미 끝났다는 사실보다, 그 상황에서 불안하지 않고 홀가분했다는 감정이 해석의 중심입니다.\n\n보통 시험을 놓치면 초조함이 뒤따르지만 이 꿈에서는 반대였습니다. 이미 끝난 시험은 더 손댈 수 없는 평가를 뜻하고, 홀가분함은 그 평가를 계속 붙잡지 않아도 된다는 마음을 보여줍니다.\n\n최근 결과를 기다리거나 스스로를 계속 평가하던 일을 이제 내려놓고 싶었다면 이 꿈과 연결됩니다. 무엇을 놓쳤는지보다 어떤 압박에서 벗어나고 싶은지를 돌아보는 편이 이 꿈의 뜻에 더 가깝습니다. 시험이 끝났다는 사실을 받아들이는 태도에서 책임을 내려놓을 준비가 드러납니다.",
       realLifeConnections: [
         "최근 이미 끝난 평가나 결과를 계속 걱정하지 않아도 된다고 느낀 순간이 있었다면 시험 종료와 홀가분함에 연결됩니다.",
         "잘해야 한다는 압박을 내려놓고 다음 일을 생각하고 싶은 마음이 있었다면 늦은 시험 꿈으로 나타날 수 있습니다.",
@@ -436,7 +478,195 @@ function frameMeaning(
   );
 }
 
-function genericFallback(context: DreamRequestContext): DreamInterpretation {
+function factActionTitle(action: DreamActionFact) {
+  const subject = action.subject ? naturalPerson(action.subject) : "";
+  const object = action.object ?? "";
+  const recipient = action.recipient ? ` ${action.recipient}에게` : "";
+  const objectPhrase =
+    action.verb === "늦다" && object
+      ? ` ${object}에`
+      : object
+        ? ` ${withObject(object)}`
+        : "";
+  if (subject) {
+    return `${withSubject(subject)}${recipient}${objectPhrase} ${action.verb.replace(/다$/u, "")}는 모습`;
+  }
+  return `${action.verb === "나오다" && object ? `${object}에서` : object ? withObject(object) : "무언가를"} ${action.verb.replace(/다$/u, "")}는 행동`;
+}
+
+function factActionMeaning(action: DreamActionFact) {
+  const subject = action.subject ? naturalPerson(action.subject) : null;
+  if (!subject) {
+    return `원문에는 “${action.evidence}”라고 적혀 있지만, 이 일을 한 사람이 누구인지는 나오지 않습니다. 따라서 주체를 특정하지 않고 ${pastAction(action.verb)}는 사실만 풀이에 사용합니다.`;
+  }
+  const recipient = action.recipient
+    ? ` ${action.recipient}에게`
+    : "";
+  const object = action.object
+    ? action.verb === "늦다"
+      ? ` ${action.object}에`
+      : ` ${withObject(action.object)}`
+    : "";
+  const purpose = action.purpose
+    ? ` 목적은 ${action.purpose}로 분명하게 적혀 있습니다.`
+    : "";
+  return `${withSubject(subject)}${recipient}${object} ${pastAction(action.verb)}는 사실이 원문에서 확인됩니다.${purpose}`;
+}
+
+function factActionStatement(action: DreamActionFact) {
+  const subject = action.subject
+    ? withSubject(naturalPerson(action.subject))
+    : "";
+  const recipient = action.recipient ? `${action.recipient}에게 ` : "";
+  const object = action.object
+    ? action.verb === "늦다"
+      ? `${action.object}에 `
+      : action.verb === "나오다"
+        ? `${action.object}에서 `
+        : `${withObject(action.object)} `
+    : "";
+  return `${subject ? `${subject} ` : ""}${recipient}${object}${pastAction(action.verb)}는 일`;
+}
+
+function factBasedFallback(
+  facts: DreamFactExtraction,
+): UngroundedDreamInterpretation {
+  const transformation = facts.transformations[0];
+  const firstAction = facts.actions[0];
+  const explicitEmotions = facts.emotions;
+  const explicitEmotion = explicitEmotions[0];
+  const emotionSummary = explicitEmotions
+    .map((emotion) => emotion.emotion)
+    .join("과 ");
+  const quantityObject = facts.objects.find((object) => object.quantity);
+  const ownedObject = facts.objects.find((object) => object.owner);
+  const brokenObject = facts.objects.find((object) =>
+    object.state?.includes("깨짐"),
+  );
+  const hasMultipleEvents =
+    facts.actions.length + facts.transformations.length > 1;
+
+  let coreConclusion: string;
+  if (transformation) {
+    const quantity = quantityObject?.quantity
+      ? `${quantityObject.quantity}의 `
+      : "";
+    const rise = facts.actions.find((action) => action.verb === "올라가다");
+    coreConclusion = `이 꿈의 중심은 ${quantity}${withSubject(transformation.before)} ${withDirection(transformation.after)} 변한 사실입니다. ${rise ? `${withSubject(transformation.after)} 하늘로 올라간 움직임까지 이어졌으며, ` : ""}변화 전후의 대상은 원문 그대로 ${withAnd(transformation.before)} ${transformation.after}입니다.`;
+  } else if (brokenObject) {
+    coreConclusion = `이 꿈의 중심은 팔찌에 달린 ${brokenObject.quantity ?? "여러"} 구슬 가운데 하나만 깨진 사실입니다. 팔찌 전체나 구슬 전부가 아니라 구슬 하나만 깨졌다는 구분이 가장 중요합니다.`;
+  } else if (firstAction?.subject === null) {
+    const following = facts.actions[1];
+    coreConclusion = `이 꿈에서 확실한 사실은 ${factActionStatement(firstAction)}${following ? `과 ${factActionStatement(following)}` : ""}입니다. ${pastAction(firstAction.verb)}는 주체가 원문에 없으므로 사용자나 다른 인물의 행동으로 확정하지 않습니다.`;
+  } else if (firstAction) {
+    const finalAction = facts.actions.at(-1);
+    const ending =
+      finalAction && finalAction.id !== firstAction.id
+        ? ` 꿈은 ${factActionStatement(finalAction)}로 끝납니다.`
+        : "";
+    coreConclusion = `이 꿈의 중심은 ${factActionTitle(firstAction)}입니다.${ending} ${explicitEmotion ? `사용자가 직접 표현한 감정은 ${emotionSummary}이며, 그 반대 감정을 임의로 덧붙이지 않습니다.` : "원문에 직접 적힌 행동과 대상만 중심으로 짧게 풀이합니다."}`;
+  } else {
+    const firstObject = facts.objects[0];
+    coreConclusion = firstObject
+      ? `이 꿈에서 확실하게 확인되는 중심 대상은 ${firstObject.quantity ? `${firstObject.quantity}의 ` : ""}${firstObject.name}입니다. 누가 무엇을 했는지 분명하지 않은 부분은 해석으로 만들어내지 않습니다.`
+      : "이 꿈은 원문에서 확실히 확인되는 내용만 제한적으로 살펴봅니다. 주체나 대상이 분명하지 않은 부분은 새로운 이야기로 만들지 않습니다.";
+  }
+
+  const keyScenes: UngroundedDreamInterpretation["keyScenes"] = [];
+  if (transformation) {
+    keyScenes.push({
+      title: `${withSubject(transformation.before)} ${withDirection(transformation.after)} 변한 모습`,
+      meaning: `${withSubject(transformation.before)} 변화 전 대상이고 ${withSubject(transformation.after)} 변화 후 대상입니다. ${transformation.quantityRelation ? `${withSubject(transformation.quantityRelation)} 변했다는 수량 관계도 그대로 유지합니다.` : "원문에 없는 수량은 덧붙이지 않습니다."}`,
+    });
+  }
+  const selectedActions =
+    facts.actions.length <= 3
+      ? facts.actions
+      : [
+          facts.actions[0],
+          facts.actions[Math.floor(facts.actions.length / 2)],
+          facts.actions.at(-1)!,
+        ];
+  for (const actionFact of selectedActions) {
+    keyScenes.push({
+      title: factActionTitle(actionFact),
+      meaning: factActionMeaning(actionFact),
+    });
+  }
+  if (brokenObject) {
+    keyScenes.push({
+      title: `팔찌에 달린 ${brokenObject.quantity} 구슬`,
+      meaning: `원문에는 구슬이 모두 ${brokenObject.quantity}이고 그중 하나만 깨졌다고 적혀 있습니다. 수량 12는 팔찌가 아니라 구슬에 붙습니다.`,
+    });
+  } else if (ownedObject) {
+    keyScenes.push({
+      title: `${withSubject(naturalPerson(ownedObject.owner ?? ""))} 지니던 ${ownedObject.name}`,
+      meaning: `${ownedObject.evidence}라는 원문으로 소유 관계가 확인됩니다. ${ownedObject.name}의 주인을 다른 인물로 바꾸지 않습니다.`,
+    });
+  }
+  if (explicitEmotion) {
+    keyScenes.push({
+      title: `사용자가 직접 느낀 ${emotionSummary}`,
+      meaning: `${explicitEmotions.map((emotion) => `“${emotion.evidence}”`).join(", ")}이라고 직접 표현했으므로 ${withObject(emotionSummary)} 그대로 반영합니다. 반대되는 감정을 사실처럼 추가하지 않습니다.`,
+    });
+  }
+  const uniqueScenes = unique(keyScenes, (scene) => scene.title).slice(0, 4);
+  while (uniqueScenes.length < 2 && facts.objects[uniqueScenes.length]) {
+    const object = facts.objects[uniqueScenes.length];
+    uniqueScenes.push({
+      title: `${object.quantity ? `${object.quantity}의 ` : ""}${object.name}`,
+      meaning: `${object.evidence}에서 ${object.name}${object.quantity ? `의 수량이 ${object.quantity}` : ""}${object.state ? `이고 상태가 ${object.state}` : ""}라는 사실만 확인됩니다. 원문에 없는 소유자나 결과는 덧붙이지 않습니다.`,
+    });
+  }
+
+  const relationshipMeaning = firstAction?.subject && firstAction.recipient
+    ? `${withSubject(naturalPerson(firstAction.subject))} ${firstAction.recipient}에게 ${firstAction.object ? withObject(firstAction.object) : "무언가를"} ${pastAction(firstAction.verb)}는 방향이 원문에서 확인됩니다. 주는 사람과 받는 사람을 바꾸지 않습니다.`
+    : "";
+  const objectMeaning = ownedObject
+    ? `${withSubject(naturalPerson(ownedObject.owner ?? ""))} 지니던 ${ownedObject.name}이라는 소유 관계가 분명합니다. 다른 인물의 물건으로 바꾸지 않습니다.`
+    : quantityObject
+      ? `${quantityObject.quantity}라는 수량은 ${quantityObject.name}에 붙습니다. 다른 대상의 개수로 옮기지 않습니다.`
+      : "";
+
+  const factSummary = uniqueScenes
+    .map((scene) => scene.title)
+    .join(", ");
+  const completeEventSummary = facts.actions
+    .map((actionFact) => factActionTitle(actionFact))
+    .join(", ");
+  const firstParagraph = `${coreConclusion}`;
+  const secondParagraph = transformation
+    ? `${transformation.before}에서 ${withDirection(transformation.after)} 바뀐 순서가 분명하며, ${facts.actions.map((actionFact) => factActionTitle(actionFact)).join(" 뒤 ")}이 확인됩니다. 해석은 이 순서를 바꾸지 않고 변화의 크기와 방향만 살펴봅니다.`
+    : `${completeEventSummary || factSummary}이 원문에서 확인되는 사건 순서입니다. 불명확한 주체·소유자·목적은 채워 넣지 않고 확실한 사실만 연결합니다.`;
+  const thirdParagraph = explicitEmotion
+    ? `${emotionSummary}은 사용자가 직접 적은 감정이므로 해석에서도 가장 우선합니다. 이 꿈과 닮은 일을 돌아볼 때에는 ${factSummary}이 함께 나타난 이유만 생각해볼 수 있습니다.`
+    : `${factSummary}이 최근 어떤 생각과 닿는지는 한 가지로 확정할 수 없습니다. 원문에 적힌 대상과 행동이 왜 기억에 남았는지만 가볍게 돌아볼 수 있습니다.`;
+
+  return {
+    title: "꿈풀이",
+    coreConclusion: compact(coreConclusion, 220),
+    dreamType: hasMultipleEvents ? "multi_scene" : "single_scene",
+    keyScenes: uniqueScenes,
+    relationshipMeaning,
+    objectMeaning,
+    integratedInterpretation: [
+      firstParagraph,
+      secondParagraph,
+      thirdParagraph,
+    ].join("\n\n"),
+    realLifeConnections: [
+      `${factSummary}과 닮은 대상이나 행동이 최근 마음에 남아 있었다면 그 이유를 돌아볼 수 있습니다.`,
+    ],
+    reflectionQuestions: [
+      `${uniqueScenes[0]?.title ?? "확실하게 기억나는 모습"}이 특히 선명하게 남은 이유는 무엇일까요?`,
+    ],
+    caution: DEFAULT_INTERPRETATION_CAUTION,
+  };
+}
+
+function genericFallback(
+  context: DreamRequestContext,
+): UngroundedDreamInterpretation {
   const scene = centralScene(context);
   const type = dreamType(context);
   const event = directEvent(scene);
@@ -497,6 +727,7 @@ function genericFallback(context: DreamRequestContext): DreamInterpretation {
 export function createDictionaryInterpretation(
   _analysis: DreamAnalysis,
   context?: DreamRequestContext,
+  facts?: DreamFactExtraction,
 ): DreamInterpretation {
   const fallbackContext = context ?? {
     scenes: [],
@@ -520,7 +751,22 @@ export function createDictionaryInterpretation(
     symbolRelationships: [],
     dictionaryEntries: [],
   };
-  return fixedInterpretation(fallbackContext) ?? genericFallback(fallbackContext);
+  const useFixedInterpretation =
+    !facts ||
+    (facts.actions.length <= 2 && facts.transformations.length === 0);
+  const interpretation =
+    (useFixedInterpretation ? fixedInterpretation(fallbackContext) : null) ??
+    (facts ? factBasedFallback(facts) : genericFallback(fallbackContext));
+  const groundedBase = {
+    ...interpretation,
+    factVersion: "v1" as const,
+  };
+  return {
+    ...groundedBase,
+    grounding: facts
+      ? buildInterpretationGrounding(groundedBase, facts)
+      : [],
+  };
 }
 
 function invalid(): ContextualValidationResult {
@@ -535,11 +781,13 @@ export function validateContextualInterpretation(
   value: unknown,
   _dream = "",
   context?: DreamRequestContext,
+  facts?: DreamFactExtraction,
 ): ContextualValidationResult {
   void _dream;
   if (!isObject(value)) return invalid();
   if (
     typeof value.coreConclusion !== "string" ||
+    value.factVersion !== "v1" ||
     (value.dreamType !== "single_scene" && value.dreamType !== "multi_scene") ||
     !Array.isArray(value.keyScenes) ||
     typeof value.relationshipMeaning !== "string" ||
@@ -547,9 +795,99 @@ export function validateContextualInterpretation(
     typeof value.integratedInterpretation !== "string" ||
     !Array.isArray(value.realLifeConnections) ||
     !Array.isArray(value.reflectionQuestions) ||
+    !Array.isArray(value.grounding) ||
     value.caution !== DEFAULT_INTERPRETATION_CAUTION
   ) {
     return invalid();
+  }
+
+  if (facts) {
+    const coreConclusion = naturalize(value.coreConclusion);
+    const relationshipMeaning = naturalize(value.relationshipMeaning);
+    const objectMeaning = naturalize(value.objectMeaning);
+    const integratedInterpretation = naturalize(
+      value.integratedInterpretation,
+    );
+    const keyScenes = value.keyScenes.map((item) => {
+      if (!isObject(item)) return null;
+      const title = naturalize(String(item.title ?? ""));
+      const meaning = naturalize(String(item.meaning ?? ""));
+      return title.length >= 3 && meaning.length >= 20
+        ? { title: compact(title, 120), meaning: compact(meaning, 320) }
+        : null;
+    });
+    const realLifeConnections = value.realLifeConnections.map((item) =>
+      naturalize(String(item ?? "")),
+    );
+    const reflectionQuestions = value.reflectionQuestions.map((item) =>
+      naturalize(String(item ?? "")),
+    );
+    const grounding = value.grounding.map((item) => {
+      if (!isObject(item)) return null;
+      const field = String(item.field ?? "").trim();
+      const sentence = String(item.sentence ?? "").trim();
+      const factIds = Array.isArray(item.factIds)
+        ? item.factIds.map((id) => String(id))
+        : [];
+      return field && sentence && factIds.length
+        ? { field, sentence, factIds }
+        : null;
+    });
+    const expectedType =
+      facts.actions.length + facts.transformations.length > 1
+        ? "multi_scene"
+        : "single_scene";
+    const combined = [
+      coreConclusion,
+      relationshipMeaning,
+      objectMeaning,
+      integratedInterpretation,
+      ...realLifeConnections,
+      ...reflectionQuestions,
+    ].join(" ");
+    if (
+      value.dreamType !== expectedType ||
+      coreConclusion.length < 80 ||
+      coreConclusion.length > 220 ||
+      integratedInterpretation.length < 280 ||
+      integratedInterpretation.length > 800 ||
+      keyScenes.length < 2 ||
+      keyScenes.length > 4 ||
+      keyScenes.some((scene) => scene === null) ||
+      realLifeConnections.length < 1 ||
+      realLifeConnections.length > 2 ||
+      reflectionQuestions.length < 1 ||
+      reflectionQuestions.length > 2 ||
+      grounding.some((entry) => entry === null) ||
+      TECHNICAL_TERMS.test(combined) ||
+      HTML_TAG.test(combined) ||
+      DETERMINISTIC_FUTURE.test(combined) ||
+      INVENTED_PERSONAL_CONTEXT.test(combined)
+    ) {
+      return rejected("quality_rejected");
+    }
+    const contextualValue: ContextualDreamInterpretation = {
+      factVersion: "v1",
+      coreConclusion,
+      dreamType: value.dreamType,
+      keyScenes: keyScenes as ContextualDreamInterpretation["keyScenes"],
+      relationshipMeaning,
+      objectMeaning,
+      integratedInterpretation: paragraphs(integratedInterpretation).join(
+        "\n\n",
+      ),
+      realLifeConnections,
+      reflectionQuestions,
+      caution: DEFAULT_INTERPRETATION_CAUTION,
+      grounding: grounding as ContextualDreamInterpretation["grounding"],
+    };
+    const factValidation = validateInterpretationFacts(
+      { title: "꿈풀이", ...contextualValue },
+      facts,
+    );
+    return factValidation.ok
+      ? { ok: true, value: contextualValue }
+      : rejected(factValidation.issue);
   }
 
   const coreConclusion = naturalize(value.coreConclusion);
@@ -577,17 +915,18 @@ export function validateContextualInterpretation(
 
   const interpretationParagraphs = paragraphs(integratedInterpretation);
   if (
-    interpretationParagraphs.length !== 3 ||
+    interpretationParagraphs.length < 1 ||
+    interpretationParagraphs.length > 4 ||
     interpretationParagraphs.some((paragraph) => {
       const count = sentences(paragraph).length;
-      return count < 2 || count > 3 || overHedged(paragraph);
+      return count < 1 || count > 4 || overHedged(paragraph);
     })
   ) {
     return rejected("paragraph_structure");
   }
   if (
     sentences(integratedInterpretation).some(
-      (sentence) => sentence.length > 115,
+      (sentence) => sentence.length > 160,
     )
   ) {
     return rejected("sentence_length");
@@ -645,7 +984,21 @@ export function validateContextualInterpretation(
     return rejected("reflection_safety");
   }
 
-  if (context) {
+  const grounding = value.grounding.map((item) => {
+    if (!isObject(item)) return null;
+    const field = String(item.field ?? "").trim();
+    const sentence = String(item.sentence ?? "").trim();
+    const factIds = Array.isArray(item.factIds)
+      ? item.factIds.map((id) => String(id))
+      : [];
+    if (!field || !sentence || !factIds.length) return null;
+    return { field, sentence, factIds };
+  });
+  if (grounding.some((item) => item === null)) {
+    return rejected("response_grounding_failed");
+  }
+
+  if (context && !facts) {
     const terms = concreteTerms(context);
     if (
       !containsConcrete(coreConclusion, terms, Math.min(2, terms.length)) ||
@@ -706,23 +1059,26 @@ export function validateContextualInterpretation(
     return rejected("repetition");
   }
 
+  const contextualValue: ContextualDreamInterpretation = {
+    factVersion: "v1",
+    coreConclusion: compact(coreConclusion, 180),
+    dreamType: value.dreamType,
+    keyScenes: validScenes,
+    relationshipMeaning: compact(relationshipMeaning, 280),
+    objectMeaning: compact(objectMeaning, 280),
+    integratedInterpretation: interpretationParagraphs.join("\n\n"),
+    realLifeConnections: realLifeConnections.map((item) =>
+      compact(item, 200),
+    ),
+    reflectionQuestions: reflectionQuestions.map((item) =>
+      compact(item, 170),
+    ),
+    caution: DEFAULT_INTERPRETATION_CAUTION,
+    grounding: grounding as ContextualDreamInterpretation["grounding"],
+  };
   return {
     ok: true,
-    value: {
-      coreConclusion: compact(coreConclusion, 180),
-      dreamType: value.dreamType,
-      keyScenes: validScenes,
-      relationshipMeaning: compact(relationshipMeaning, 280),
-      objectMeaning: compact(objectMeaning, 280),
-      integratedInterpretation: interpretationParagraphs.join("\n\n"),
-      realLifeConnections: realLifeConnections.map((item) =>
-        compact(item, 200),
-      ),
-      reflectionQuestions: reflectionQuestions.map((item) =>
-        compact(item, 170),
-      ),
-      caution: DEFAULT_INTERPRETATION_CAUTION,
-    },
+    value: contextualValue,
   };
 }
 
@@ -732,6 +1088,7 @@ export function validateCachedInterpretation(
   if (!isObject(value) || value.title !== "꿈풀이") return null;
   const validated = validateContextualInterpretation({
     coreConclusion: value.coreConclusion,
+    factVersion: value.factVersion,
     dreamType: value.dreamType,
     keyScenes: value.keyScenes,
     relationshipMeaning: value.relationshipMeaning,
@@ -740,6 +1097,7 @@ export function validateCachedInterpretation(
     realLifeConnections: value.realLifeConnections,
     reflectionQuestions: value.reflectionQuestions,
     caution: value.caution,
+    grounding: value.grounding,
   });
   return validated.ok
     ? { title: "꿈풀이", ...validated.value }
