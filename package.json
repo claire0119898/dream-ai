@@ -16,7 +16,8 @@
     "verify:relations": "node --no-warnings --experimental-strip-types scripts/verify-entity-relations.mjs",
     "verify:transformations": "node --no-warnings --experimental-strip-types scripts/verify-transformations.mjs",
     "verify:interpretation-facts": "node --no-warnings --experimental-strip-types scripts/verify-interpretation-facts.mjs",
-    "verify:content": "node --no-warnings --experimental-strip-types scripts/verify-dream-content.mjs"
+    "verify:content": "node --no-warnings --experimental-strip-types scripts/verify-dream-content.mjs",
+    "verify:grounded-reading": "node --no-warnings --experimental-strip-types scripts/verify-grounded-reading.mjs"
   },
   "dependencies": {
     "next": "16.2.10",

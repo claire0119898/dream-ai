@@ -61,7 +61,21 @@ export interface DreamInterpretation {
     sentence: string;
     factIds: string[];
   }>;
+  overallInterpretation?: string;
+  sceneSummary?: string;
+  symbols?: DreamSymbolInterpretation[];
+  integratedMeaning?: string;
+  traditionalInterpretation?: string;
+  psychologicalInterpretation?: string;
+  oneSentenceSummary?: string;
+  disclaimer?: string;
 }
+
+export type DreamSymbolInterpretation = {
+  symbol: string;
+  generalMeaning: string;
+  meaningInThisDream: string;
+};
 
 export interface ContextualDreamInterpretation {
   factVersion: "v1";
@@ -82,6 +96,14 @@ export interface ContextualDreamInterpretation {
     sentence: string;
     factIds: string[];
   }>;
+  overallInterpretation?: string;
+  sceneSummary?: string;
+  symbols?: DreamSymbolInterpretation[];
+  integratedMeaning?: string;
+  traditionalInterpretation?: string;
+  psychologicalInterpretation?: string;
+  oneSentenceSummary?: string;
+  disclaimer?: string;
 }
 
 export type DreamClarification = {

@@ -41,7 +41,7 @@ export default function DreamResult({
             한눈에 보는 풀이
           </h3>
           <p className="mt-3 max-w-[47.5rem] break-words text-[0.95rem] font-medium leading-[1.8] text-slate-100 sm:mt-4 sm:text-[1.05rem]">
-            {result.coreConclusion}
+            {result.overallInterpretation}
           </p>
 
           {(result.relationshipMeaning || result.objectMeaning) && (
@@ -70,17 +70,24 @@ export default function DreamResult({
           )}
         </article>
 
+        <article className={cardClass}>
+          <h3 className="text-lg font-bold text-white sm:text-xl">꿈에서 실제로 일어난 장면</h3>
+          <p className="mt-3 break-words text-[0.95rem] leading-[1.8] text-slate-200 sm:text-base">
+            {result.sceneSummary}
+          </p>
+        </article>
+
         <section aria-labelledby="key-scenes-title">
           <h3
             id="key-scenes-title"
             className="px-1 text-lg font-bold text-white sm:text-xl"
           >
-            핵심 장면
+            핵심 상징 해석
           </h3>
           <div className="mt-3 grid min-w-0 gap-3 md:grid-cols-2 sm:gap-4">
-            {result.keyScenes.map((scene, index) => (
+            {result.symbols.map((scene, index) => (
               <article
-                key={`${scene.title}-${index}`}
+                key={`${scene.symbol}-${index}`}
                 className="min-w-0 rounded-[1.4rem] border border-white/10 bg-white/[0.045] p-4 sm:rounded-3xl sm:p-6"
               >
                 <div className="flex min-w-0 items-start gap-3">
@@ -92,10 +99,11 @@ export default function DreamResult({
                   </span>
                   <div className="min-w-0">
                     <h4 className="break-words text-base font-bold leading-7 text-white sm:text-lg">
-                      {scene.title}
+                      {scene.symbol}
                     </h4>
                     <p className="mt-2 break-words text-sm leading-[1.75] text-slate-200 sm:text-[0.95rem]">
-                      {scene.meaning}
+                      <span className="block text-slate-300">{scene.generalMeaning}</span>
+                      <span className="mt-2 block text-slate-100">이 꿈에서는 {scene.meaningInThisDream}</span>
                     </p>
                   </div>
                 </div>
@@ -105,47 +113,24 @@ export default function DreamResult({
         </section>
 
         <article className={cardClass}>
-          <h3 className="text-lg font-bold text-white sm:text-xl">종합 풀이</h3>
-          <div className="mx-auto mt-3 max-w-[47.5rem] space-y-4 sm:mt-4 sm:space-y-5">
-            {result.interpretationParagraphs.map((paragraph, index) => (
-              <p
-                key={`${index}-${paragraph.slice(0, 24)}`}
-                className="break-words text-[0.95rem] leading-[1.8] text-slate-200 sm:text-base"
-              >
-                {paragraph}
-              </p>
-            ))}
-          </div>
+          <h3 className="text-lg font-bold text-white sm:text-xl">꿈 전체의 의미</h3>
+          <p className="mx-auto mt-3 max-w-[47.5rem] break-words text-[0.95rem] leading-[1.8] text-slate-200 sm:mt-4 sm:text-base">{result.integratedMeaning}</p>
         </article>
 
-        <article className="min-w-0 rounded-[1.4rem] border border-violet-300/20 bg-violet-400/[0.07] p-4 sm:rounded-3xl sm:p-6 lg:p-7">
-          <h3 className="text-lg font-bold text-white sm:text-xl">
-            함께 생각해볼 점
-          </h3>
-          <ul className="mt-3 space-y-2.5 sm:mt-4">
-            {result.realLifeConnections.map((point) => (
-              <li
-                key={point}
-                className="flex min-w-0 gap-3 text-sm leading-[1.75] text-slate-200 sm:text-base"
-              >
-                <span
-                  aria-hidden="true"
-                  className="mt-[0.65rem] size-1.5 shrink-0 rounded-full bg-violet-300"
-                />
-                <span className="min-w-0 break-words">{point}</span>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-5 space-y-2 rounded-2xl border border-white/10 bg-black/10 p-4">
-            {result.reflectionQuestions.map((question) => (
-              <p
-                key={question}
-                className="break-words text-sm font-medium leading-[1.75] text-white sm:text-base"
-              >
-                {question}
-              </p>
-            ))}
-          </div>
+        <div className="grid min-w-0 gap-3 md:grid-cols-2 sm:gap-4">
+          <article className={cardClass}>
+            <h3 className="text-lg font-bold text-white sm:text-xl">전통적인 해몽</h3>
+            <p className="mt-3 break-words text-sm leading-[1.8] text-slate-200 sm:text-base">{result.traditionalInterpretation}</p>
+          </article>
+          <article className="min-w-0 rounded-[1.4rem] border border-violet-300/20 bg-violet-400/[0.07] p-4 sm:rounded-3xl sm:p-6 lg:p-7">
+            <h3 className="text-lg font-bold text-white sm:text-xl">심리적인 해석</h3>
+            <p className="mt-3 break-words text-sm leading-[1.8] text-slate-200 sm:text-base">{result.psychologicalInterpretation}</p>
+          </article>
+        </div>
+
+        <article className="rounded-2xl border border-violet-300/25 bg-violet-400/[0.08] px-4 py-4 text-center sm:px-6">
+          <h3 className="text-sm font-semibold text-violet-200">한 문장 해석</h3>
+          <p className="mt-2 text-base font-semibold leading-[1.75] text-white">{result.oneSentenceSummary}</p>
         </article>
 
         <aside className="rounded-2xl border border-white/[0.07] bg-black/10 px-4 py-3.5 text-sm leading-[1.75] text-slate-400 sm:px-5 sm:py-4">

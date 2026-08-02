@@ -105,6 +105,68 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function structuredReading(value: Record<string, unknown>) {
+  const hasStructuredFields = [
+    "overallInterpretation",
+    "sceneSummary",
+    "symbols",
+    "integratedMeaning",
+    "traditionalInterpretation",
+    "psychologicalInterpretation",
+    "oneSentenceSummary",
+  ].some((field) => field in value);
+  // 배포 전 생성된 캐시와 기존 검증 fixture는 구형 필드만 가질 수 있습니다.
+  if (!hasStructuredFields) return {};
+  const symbols = Array.isArray(value.symbols)
+    ? value.symbols.map((item) => {
+        if (!isObject(item)) return null;
+        const symbol = naturalize(String(item.symbol ?? ""));
+        const generalMeaning = naturalize(String(item.generalMeaning ?? ""));
+        const meaningInThisDream = naturalize(String(item.meaningInThisDream ?? ""));
+        return symbol && generalMeaning && meaningInThisDream
+          ? { symbol, generalMeaning, meaningInThisDream }
+          : null;
+      })
+    : [];
+  const fields = {
+    title: naturalize(String(value.title ?? "꿈풀이")),
+    overallInterpretation: naturalize(String(value.overallInterpretation ?? "")),
+    sceneSummary: naturalize(String(value.sceneSummary ?? "")),
+    symbols,
+    integratedMeaning: naturalize(String(value.integratedMeaning ?? "")),
+    traditionalInterpretation: naturalize(String(value.traditionalInterpretation ?? "")),
+    psychologicalInterpretation: naturalize(String(value.psychologicalInterpretation ?? "")),
+    oneSentenceSummary: naturalize(String(value.oneSentenceSummary ?? "")),
+    disclaimer: naturalize(String(value.disclaimer ?? "")),
+  };
+  const combined = [
+    fields.overallInterpretation,
+    fields.title,
+    fields.sceneSummary,
+    ...symbols.flatMap((item) => item ? [item.symbol, item.generalMeaning, item.meaningInThisDream] : []),
+    fields.integratedMeaning,
+    fields.traditionalInterpretation,
+    fields.psychologicalInterpretation,
+    fields.oneSentenceSummary,
+    fields.disclaimer,
+  ].join(" ");
+  if (
+    fields.overallInterpretation.length < 40 ||
+    fields.sceneSummary.length < 10 ||
+    symbols.length < 2 || symbols.length > 5 || symbols.some((item) => item === null) ||
+    fields.integratedMeaning.length < 60 ||
+    fields.traditionalInterpretation.length < 40 ||
+    fields.psychologicalInterpretation.length < 40 ||
+    fields.oneSentenceSummary.length < 15 ||
+    TECHNICAL_TERMS.test(combined) || HTML_TAG.test(combined) ||
+    DETERMINISTIC_FUTURE.test(combined) || INVENTED_PERSONAL_CONTEXT.test(combined)
+  ) return null;
+  return {
+    ...fields,
+    symbols: symbols as NonNullable<ContextualDreamInterpretation["symbols"]>,
+  };
+}
+
 function isSafeText(value: unknown, min: number, max: number): value is string {
   if (typeof value !== "string") return false;
   const text = value.trim();
@@ -785,6 +847,8 @@ export function validateContextualInterpretation(
 ): ContextualValidationResult {
   void _dream;
   if (!isObject(value)) return invalid();
+  const reading = structuredReading(value);
+  if (!reading) return invalid();
   if (
     typeof value.coreConclusion !== "string" ||
     value.factVersion !== "v1" ||
@@ -880,6 +944,7 @@ export function validateContextualInterpretation(
       reflectionQuestions,
       caution: DEFAULT_INTERPRETATION_CAUTION,
       grounding: grounding as ContextualDreamInterpretation["grounding"],
+      ...reading,
     };
     const factValidation = validateInterpretationFacts(
       { title: "꿈풀이", ...contextualValue },
@@ -1075,6 +1140,7 @@ export function validateContextualInterpretation(
     ),
     caution: DEFAULT_INTERPRETATION_CAUTION,
     grounding: grounding as ContextualDreamInterpretation["grounding"],
+    ...reading,
   };
   return {
     ok: true,
@@ -1098,6 +1164,14 @@ export function validateCachedInterpretation(
     reflectionQuestions: value.reflectionQuestions,
     caution: value.caution,
     grounding: value.grounding,
+    overallInterpretation: value.overallInterpretation,
+    sceneSummary: value.sceneSummary,
+    symbols: value.symbols,
+    integratedMeaning: value.integratedMeaning,
+    traditionalInterpretation: value.traditionalInterpretation,
+    psychologicalInterpretation: value.psychologicalInterpretation,
+    oneSentenceSummary: value.oneSentenceSummary,
+    disclaimer: value.disclaimer,
   });
   return validated.ok
     ? { title: "꿈풀이", ...validated.value }

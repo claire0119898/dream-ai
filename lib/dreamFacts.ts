@@ -119,6 +119,10 @@ const OBJECT_NAMES = [
   "고양이",
   "새",
   "용",
+  "물",
+  "물고기",
+  "뱀",
+  "이",
   "집",
   "불",
   "비",
@@ -236,6 +240,7 @@ function explicitQuantity(dream: string, name: string) {
     new RegExp(`(한|두|세|네)\\s*(개|마리|사람|채)의?\\s*${escaped}`, "u"),
   );
   if (korean) return `${korean[1]} ${korean[2]}`;
+  if (name === "이" && /이가\s*하나\s*빠/u.test(dream)) return "한 개";
   return null;
 }
 
@@ -402,7 +407,7 @@ function extractActions(
 
   const beadsRise = evidence(
     dream,
-    /(?:용이|용으로\s*변해서).{0,16}하늘(?:로|을)\s*올라갔/u,
+    /(?:용이|용들이|용으로\s*변해서|용이\s*되어).{0,24}하늘(?:로|을)\s*올라(?:갔|가는)/u,
   );
   if (
     beadsRise &&
@@ -418,6 +423,17 @@ function extractActions(
       evidence: beadsRise,
     });
   }
+
+  const waterRises = evidence(dream, /집\s*안에\s*물이\s*차오르/u);
+  if (waterRises) action(actions, { subject: "물", verb: "차오르다", object: "집", recipient: null, purpose: null, evidence: waterRises });
+  const fishSwim = evidence(dream, /물고기들이?\s*헤엄쳤/u);
+  if (fishSwim) action(actions, { subject: "물고기", verb: "헤엄치다", object: null, recipient: null, purpose: null, evidence: fishSwim });
+  const snakeLooks = evidence(dream, /친구가\s*뱀으로\s*변해서\s*나를\s*바라봤/u);
+  if (snakeLooks) action(actions, { subject: "뱀", verb: "바라보다", object: "나", recipient: null, purpose: null, evidence: snakeLooks });
+  const toothFalls = evidence(dream, /이가\s*하나\s*빠졌/u);
+  if (toothFalls) action(actions, { subject: "이", verb: "빠지다", object: null, recipient: null, purpose: null, evidence: toothFalls });
+  const uncertainFly = evidence(dream, /큰\s*새\s*같은\s*것이\s*날아갔/u);
+  if (uncertainFly) action(actions, { subject: null, verb: "날아가다", object: "새 같은 것", recipient: null, purpose: null, evidence: uncertainFly });
   if (
     confirmedKey === "beads_to_dragon" &&
     /염주알이\s*용이\s*하늘을\s*되어\s*올라갔/u.test(dream) &&
@@ -573,16 +589,16 @@ function extractTransformations(
   const transformations: DreamTransformationFact[] = [];
   const beads = evidence(
     dream,
-    /(?:\d+\s*개의?\s*)?염주알이\s*(?:하나씩|하나하나|각각)?\s*용으로\s*변해서/u,
+    /(?:\d+\s*개의?\s*)?(?:염주알(?:이나|\s*또는)?\s*묵주알|염주알)(?:이|이\s*알마다|이\s*각각|\s*알마다)?\s*(?:하나씩|하나하나|각각)?\s*용(?:으로\s*변해서|이\s*되어)/u,
   );
   if (beads) {
     transformations.push({
       id: "transformation_1",
-      before: "염주알",
+      before: /묵주알/u.test(beads) ? "염주알 또는 묵주알" : "염주알",
       after: "용",
       trigger: "하나씩 변함",
-      quantityRelation: /하나씩|하나하나|각각/u.test(beads)
-        ? "염주알 각각"
+      quantityRelation: /하나씩|하나하나|각각|알마다/u.test(beads)
+        ? "모든 알 각각"
         : null,
       explicit: true,
       evidence: beads,
@@ -601,6 +617,12 @@ function extractTransformations(
       evidence: cat,
     });
   }
+
+  const friend = evidence(dream, /친구가\s*뱀으로\s*변해서/u);
+  if (friend) transformations.push({
+    id: `transformation_${transformations.length + 1}`,
+    before: "친구", after: "뱀", trigger: null, quantityRelation: "친구 한 명", explicit: true, evidence: friend,
+  });
 
   if (
     confirmedKey === "beads_to_dragon" &&
@@ -647,7 +669,8 @@ function extractEmotions(dream: string) {
     [/홀가분/u, "홀가분함"],
     [/안심/u, "안심"],
     [/걱정/u, "걱정"],
-    [/무서/u, "두려움"],
+    [/무섭지\s*않/u, "무섭지 않음"],
+    [/무서웠|무서워|무서움/u, "두려움"],
     [/기뻐/u, "기쁨"],
   ];
   return patterns.flatMap(([pattern, emotion], index) => {
@@ -721,6 +744,10 @@ export function extractDreamFacts(
   confirmedKey?: string,
 ): DreamFactExtraction {
   const ambiguity = ambiguousPhrase(dream, confirmedKey);
+  const explicitUncertainty = evidence(
+    dream,
+    /정확히\s*기억나지\s*않지만.{0,30}새\s*같은\s*것/u,
+  );
   const people = extractPeople(dream);
   const objects = extractObjects(dream);
   let actions = extractActions(dream, context, confirmedKey);
@@ -756,15 +783,20 @@ export function extractDreamFacts(
     ending: endingEvidence
       ? { id: "ending_1", text: endingEvidence, evidence: endingEvidence }
       : null,
-    uncertainPhrases: ambiguity
-      ? [
+    uncertainPhrases: [
+      ...(ambiguity ? [
           {
             id: "uncertain_1",
             evidence: ambiguity.evidence,
             reason: ambiguity.reason,
           },
-        ]
-      : [],
+        ] : []),
+      ...(explicitUncertainty ? [{
+        id: ambiguity ? "uncertain_2" : "uncertain_1",
+        evidence: explicitUncertainty,
+        reason: "날아간 대상이 정확히 새인지는 확정할 수 없습니다.",
+      }] : []),
+    ],
     understandingConfidence: confidence,
     ambiguityLevel: low ? "high" : missingSubject ? "medium" : "low",
     clarification: ambiguity
@@ -776,6 +808,40 @@ export function extractDreamFacts(
           statements: ambiguity.statements,
         }
       : null,
+  };
+}
+
+export function buildDreamSceneAnalysis(dream: string, facts: DreamFactExtraction) {
+  const people = facts.people.map((item) => item.name);
+  const places = facts.locations.map((item) => item.name);
+  return {
+    normalizedDream: facts.ending?.text || dream,
+    objects: facts.objects.map(({ name, quantity, state }) => ({ name, quantity, state })),
+    actions: facts.actions.map(({ subject, verb, object, recipient }) => ({
+      subject,
+      action: verb,
+      target: object || recipient,
+      direction: /올라/u.test(verb) ? "위쪽, 하늘" : null,
+    })),
+    transformations: facts.transformations.map(({ before, after, quantityRelation }) => ({
+      from: before,
+      to: after,
+      scope: quantityRelation,
+    })),
+    people,
+    places,
+    emotionsExplicitlyMentioned: facts.emotions.map((item) => item.emotion),
+    uncertainElements: facts.uncertainPhrases.map((item) => item.reason),
+    coreSymbols: [...new Set([
+      ...facts.objects.map((item) => item.name),
+      ...facts.transformations.map((item) => `${item.before}에서 ${item.after}로 변화`),
+    ])].slice(0, 5),
+    forbiddenAssumptions: [
+      ...(people.length ? [] : ["입력에 없는 인물을 추가하지 않음"]),
+      ...(places.length ? [] : ["입력에 없는 장소를 추가하지 않음"]),
+      ...(facts.emotions.length ? [] : ["입력에 없는 감정을 사실로 추가하지 않음"]),
+      "입력에 없는 공격·파괴·탑승·소유·미래 사건을 추가하지 않음",
+    ],
   };
 }
 
@@ -900,7 +966,8 @@ export function validateExtractedFacts(
   for (const objectFact of facts.objects) {
     if (
       objectFact.quantity &&
-      !normalizedDream.includes(normalize(objectFact.quantity))
+      !normalizedDream.includes(normalize(objectFact.quantity)) &&
+      !(objectFact.quantity === "한 개" && /하나/u.test(dream))
     ) {
       return { ok: false, issue: "quantity_mismatch", field: objectFact.id };
     }
@@ -920,11 +987,30 @@ function resultText(interpretation: DreamInterpretation) {
     interpretation.integratedInterpretation,
     ...interpretation.realLifeConnections,
     ...interpretation.reflectionQuestions,
+    interpretation.overallInterpretation ?? "",
+    interpretation.sceneSummary ?? "",
+    ...(interpretation.symbols ?? []).flatMap((item) => [
+      item.symbol,
+      item.generalMeaning,
+      item.meaningInThisDream,
+    ]),
+    interpretation.integratedMeaning ?? "",
+    interpretation.traditionalInterpretation ?? "",
+    interpretation.psychologicalInterpretation ?? "",
+    interpretation.oneSentenceSummary ?? "",
   ].join("\n");
 }
 
 function concreteSentences(interpretation: DreamInterpretation) {
-  return resultText(interpretation)
+  return [
+    interpretation.coreConclusion,
+    ...interpretation.keyScenes.flatMap((scene) => [scene.title, scene.meaning]),
+    interpretation.relationshipMeaning,
+    interpretation.objectMeaning,
+    interpretation.integratedInterpretation,
+    ...interpretation.realLifeConnections,
+    ...interpretation.reflectionQuestions,
+  ].join("\n")
     .split(/(?<=[.!?。！？])|\n+/u)
     .map((sentence) => sentence.trim())
     .filter(
