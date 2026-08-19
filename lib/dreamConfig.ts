@@ -17,13 +17,13 @@ function interpretationMode(): DreamInterpretationMode {
 export const DREAM_INTERPRETATION_MODE = interpretationMode();
 export const ENRICHMENT_TIMEOUT_MS = positiveInteger(
   ["DREAM_REQUEST_TIMEOUT_MS", "API_TIMEOUT_MS"],
-  30_000,
-  30_000
+  45_000,
+  60_000
 );
 export const ENRICHMENT_MAX_OUTPUT_TOKENS = positiveInteger(
   ["DREAM_MAX_OUTPUT_TOKENS", "EXTERNAL_API_MAX_OUTPUT_TOKENS"],
-  3000,
-  4000
+  3600,
+  5000
 );
 export const DREAM_CONTEXT_ENTRY_LIMIT = positiveInteger(
   ["DREAM_CONTEXT_ENTRY_LIMIT"],

@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 import { EXTERNAL_USAGE_LIMITS } from "./dreamConfig";
-import { validateCachedInterpretation } from "./dreamInterpretation";
 import type { DreamInterpretation } from "../types/dream";
 
 export type UsageDecision =
@@ -14,12 +13,13 @@ type ReserveInput = {
   identityHash: string;
   dreamHash: string;
   now?: Date;
+  allowDuplicate?: boolean;
 };
 
 type MemoryEntry = { count: number; expiresAt: number };
 type InterpretationCacheEnvelope = {
-  schemaVersion: "facts-v1";
-  promptVersion: "grounded-v1";
+  schemaVersion: "semantic-v2";
+  promptVersion: "two-pass-v2";
   interpretation: DreamInterpretation;
 };
 type MemoryCacheEntry = {
@@ -57,15 +57,15 @@ function limiterKeys(input: ReserveInput) {
 }
 
 function interpretationCacheKey(dreamHash: string) {
-  return `jamgyeol:interpretation:v9:${dreamHash}`;
+  return `jamgyeol:interpretation:v10:${dreamHash}`;
 }
 
 function cacheEnvelope(
   interpretation: DreamInterpretation,
 ): InterpretationCacheEnvelope {
   return {
-    schemaVersion: "facts-v1",
-    promptVersion: "grounded-v1",
+    schemaVersion: "semantic-v2",
+    promptVersion: "two-pass-v2",
     interpretation,
   };
 }
@@ -74,12 +74,23 @@ function cachedInterpretation(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const envelope = value as Partial<InterpretationCacheEnvelope>;
   if (
-    envelope.schemaVersion !== "facts-v1" ||
-    envelope.promptVersion !== "grounded-v1"
+    envelope.schemaVersion !== "semantic-v2" ||
+    envelope.promptVersion !== "two-pass-v2"
   ) {
     return null;
   }
-  return validateCachedInterpretation(envelope.interpretation);
+  const interpretation = envelope.interpretation;
+  if (
+    !interpretation ||
+    typeof interpretation !== "object" ||
+    typeof interpretation.title !== "string" ||
+    typeof interpretation.coreConclusion !== "string" ||
+    !Array.isArray(interpretation.keyScenes) ||
+    interpretation.keyScenes.length < 2 ||
+    typeof interpretation.integratedInterpretation !== "string" ||
+    !Array.isArray(interpretation.realLifeConnections)
+  ) return null;
+  return interpretation;
 }
 
 export class MemoryExternalUsageStore implements ExternalUsageStore {
@@ -106,7 +117,7 @@ export class MemoryExternalUsageStore implements ExternalUsageStore {
       return "user_limited";
     }
     if (globalDay >= EXTERNAL_USAGE_LIMITS.globalDay) return "global_limited";
-    if ((this.duplicates.get(keys.duplicate) ?? 0) > now) return "duplicate";
+    if (!input.allowDuplicate && (this.duplicates.get(keys.duplicate) ?? 0) > now) return "duplicate";
 
     this.increment(keys.minute, now + 120_000, now);
     this.increment(keys.hour, now + 7_200_000, now);
@@ -172,7 +183,7 @@ end
 if global_day >= tonumber(ARGV[4]) then
   return 'global_limited'
 end
-if redis.call('EXISTS', KEYS[5]) == 1 then
+if ARGV[6] ~= '1' and redis.call('EXISTS', KEYS[5]) == 1 then
   return 'duplicate'
 end
 
@@ -228,6 +239,7 @@ class UpstashExternalUsageStore implements ExternalUsageStore {
         String(EXTERNAL_USAGE_LIMITS.day),
         String(EXTERNAL_USAGE_LIMITS.globalDay),
         String(EXTERNAL_USAGE_LIMITS.duplicateSeconds),
+        input.allowDuplicate ? "1" : "0",
       ]);
     if (typeof data.result !== "string") throw new Error("Usage store returned an invalid result");
     if (
@@ -270,8 +282,9 @@ function usageStore(): ExternalUsageStore | null {
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
 
   if (url && token) return new UpstashExternalUsageStore(url.replace(/\/$/, ""), token);
-  if (process.env.NODE_ENV !== "production") return memoryStore;
-  return null;
+  // 영속 저장소가 없어도 꿈풀이 자체를 막지는 않습니다. 서버리스 인스턴스별
+  // 메모리 제한을 적용하고, 운영 전역 한도가 필요할 때 Upstash를 연결합니다.
+  return memoryStore;
 }
 
 export function hashPrivateValue(value: string) {
@@ -295,7 +308,8 @@ export function trustedClientAddress(request: Request) {
 
 export async function reserveExternalAttempt(
   request: Request,
-  dream: string
+  dream: string,
+  allowDuplicate = false,
 ): Promise<UsageDecision> {
   const store = usageStore();
   if (!store) return "store_unavailable";
@@ -304,6 +318,7 @@ export async function reserveExternalAttempt(
     return await store.reserve({
       identityHash: hashPrivateValue(trustedClientAddress(request)),
       dreamHash: hashPrivateValue(normalizedDreamFingerprint(dream)),
+      allowDuplicate,
     });
   } catch {
     return "store_unavailable";
