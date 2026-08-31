@@ -69,12 +69,15 @@ export interface DreamInterpretation {
   psychologicalInterpretation?: string;
   oneSentenceSummary?: string;
   disclaimer?: string;
+  flowAssessment?: string;
+  fortuneFlow?: string;
 }
 
 export type DreamSymbolInterpretation = {
   symbol: string;
   generalMeaning: string;
   meaningInThisDream: string;
+  connectedMeaning?: string;
 };
 
 export interface ContextualDreamInterpretation {
@@ -104,6 +107,8 @@ export interface ContextualDreamInterpretation {
   psychologicalInterpretation?: string;
   oneSentenceSummary?: string;
   disclaimer?: string;
+  flowAssessment?: string;
+  fortuneFlow?: string;
 }
 
 export type DreamClarification = {

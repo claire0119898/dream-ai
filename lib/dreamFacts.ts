@@ -598,7 +598,7 @@ function extractTransformations(
       after: "용",
       trigger: "하나씩 변함",
       quantityRelation: /하나씩|하나하나|각각|알마다/u.test(beads)
-        ? "모든 알 각각"
+        ? "염주알 각각"
         : null,
       explicit: true,
       evidence: beads,

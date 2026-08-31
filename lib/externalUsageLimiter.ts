@@ -18,8 +18,8 @@ type ReserveInput = {
 
 type MemoryEntry = { count: number; expiresAt: number };
 type InterpretationCacheEnvelope = {
-  schemaVersion: "semantic-v2";
-  promptVersion: "two-pass-v2";
+  schemaVersion: "interpretation-v12";
+  promptVersion: "dream-reading-v12";
   interpretation: DreamInterpretation;
 };
 type MemoryCacheEntry = {
@@ -57,15 +57,15 @@ function limiterKeys(input: ReserveInput) {
 }
 
 function interpretationCacheKey(dreamHash: string) {
-  return `jamgyeol:interpretation:v10:${dreamHash}`;
+  return `jamgyeol:interpretation:v12:${dreamHash}`;
 }
 
 function cacheEnvelope(
   interpretation: DreamInterpretation,
 ): InterpretationCacheEnvelope {
   return {
-    schemaVersion: "semantic-v2",
-    promptVersion: "two-pass-v2",
+    schemaVersion: "interpretation-v12",
+    promptVersion: "dream-reading-v12",
     interpretation,
   };
 }
@@ -74,8 +74,8 @@ function cachedInterpretation(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const envelope = value as Partial<InterpretationCacheEnvelope>;
   if (
-    envelope.schemaVersion !== "semantic-v2" ||
-    envelope.promptVersion !== "two-pass-v2"
+    envelope.schemaVersion !== "interpretation-v12" ||
+    envelope.promptVersion !== "dream-reading-v12"
   ) {
     return null;
   }
@@ -88,7 +88,13 @@ function cachedInterpretation(value: unknown) {
     !Array.isArray(interpretation.keyScenes) ||
     interpretation.keyScenes.length < 2 ||
     typeof interpretation.integratedInterpretation !== "string" ||
-    !Array.isArray(interpretation.realLifeConnections)
+    !Array.isArray(interpretation.realLifeConnections) ||
+    typeof interpretation.overallInterpretation !== "string" ||
+    !Array.isArray(interpretation.symbols) ||
+    typeof interpretation.traditionalInterpretation !== "string" ||
+    typeof interpretation.psychologicalInterpretation !== "string" ||
+    typeof interpretation.fortuneFlow !== "string" ||
+    typeof interpretation.oneSentenceSummary !== "string"
   ) return null;
   return interpretation;
 }

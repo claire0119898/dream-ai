@@ -32,13 +32,17 @@ for (const dream of dreams) {
   }, dream);
   assert(understanding, `의미 분석 구조가 원문 근거 검사를 통과해야 합니다: ${dream.slice(0, 25)}`);
   const reading = validateReading({
-    title: "장면의 흐름이 보여주는 꿈", overview: "이 꿈은 처음부터 마지막까지 이어지는 장면과 직접 느낀 감정의 방향을 중심으로 이해할 수 있습니다. 개별 상징보다 변화와 결말이 전체 의미를 정합니다.",
-    importantScenes: [
-      { title: "꿈에서 처음 펼쳐진 장면", interpretation: "처음의 모습은 꿈의 출발점을 보여주며, 이후 장면에서 무엇이 달라지는지 비교할 수 있는 기준이 됩니다.", sourceSceneOrders: [1] },
-      { title: "마지막에 남은 중요한 장면", interpretation: "마지막 모습은 꿈의 감정과 움직임이 도착한 방향을 보여주므로 전체 풀이에서 가장 무게 있게 살펴볼 부분입니다.", sourceSceneOrders: [understanding.scenes.length] },
+    title: "장면의 흐름이 보여주는 꿈", overallInterpretation: "이 꿈은 처음부터 마지막까지 이어지는 변화와 직접 느낀 감정이 뜻을 결정하는 전환의 꿈입니다. 시작의 상태보다 결말에 남은 감정과 행동에 더 큰 무게가 있으며, 그 방향이 현재 마음이 원하는 움직임을 보여줍니다.", flowAssessment: "전환 · 정리",
+    symbols: [
+      { symbol: "꿈에서 처음 펼쳐진 장면", generalMeaning: "시작 장면은 꿈이 출발한 마음의 상태와 익숙한 조건을 나타냅니다.", meaningInThisDream: "이 꿈에서는 이후 무엇이 달라지는지를 보여주는 기준점이 되어 변화의 크기를 분명하게 만듭니다.", connectedMeaning: "마지막 장면과 대비되면서 꿈이 어느 방향으로 이동했는지를 보여줍니다.", sourceSceneOrders: [1] },
+      { symbol: "마지막에 남은 중요한 장면", generalMeaning: "꿈의 결말은 감정과 움직임이 최종적으로 도착한 방향을 상징합니다.", meaningInThisDream: "마지막 모습에 남은 감정이 전체 상징의 긍정적이거나 긴장된 뜻을 결정합니다.", connectedMeaning: "시작과의 차이를 통해 지금 마음이 정리하거나 향하려는 방향을 드러냅니다.", sourceSceneOrders: [understanding.scenes.length] },
     ],
     integratedInterpretation: "이 꿈은 처음 장면에서 시작해 마지막 장면으로 이동하는 흐름을 보여줍니다. 각각의 상징을 따로 떼기보다 앞뒤 장면의 차이를 함께 보는 편이 자연스럽습니다.\n\n직접 표현된 감정이 있다면 일반적인 상징 사전보다 그 감정을 먼저 보아야 합니다. 같은 장소나 대상도 꿈속에서 편안했는지 두려웠는지에 따라 의미가 달라집니다.\n\n마지막 장면은 꿈의 방향이 어디로 향했는지를 보여줍니다. 최근 비슷한 감정의 변화나 선택이 있었다면 그 경험을 돌아보는 참고로 삼을 수 있습니다.",
-    reflectionPoints: ["꿈의 처음과 마지막 사이에서 감정이나 행동이 어떻게 달라졌는지 현실의 경험과 연결해 살펴보세요."],
+    traditionalInterpretation: "전통적인 해몽에서는 시작보다 마지막 장면의 밝기와 움직임을 중심으로 기운의 방향을 읽습니다. 다만 이는 상징적인 풀이이며 실제 미래 사건을 확정하지 않습니다.",
+    psychologicalInterpretation: "심리적으로는 시작과 마지막 사이의 감정 변화가 현재 마음이 벗어나고 싶은 상태와 향하고 싶은 상태를 보여주는 경우가 있습니다. 구체적인 현실 문제를 단정하지 않고 가능성으로 읽습니다.",
+    fortuneFlow: "좋고 나쁨을 단정하기보다 전환의 성격이 강한 꿈입니다. 마지막 감정이 편안하고 능동적이면 회복 쪽으로, 두렵고 막혀 있으면 주의 쪽으로 읽습니다.",
+    oneSentenceSummary: "시작과 결말 사이의 감정과 행동 변화가 지금 마음이 향하는 방향을 보여주는 꿈입니다.",
+    disclaimer: "꿈풀이는 미래의 사건을 확정하는 판단이 아니라, 최근의 감정과 경험을 돌아보기 위한 참고 정보입니다.",
     groundingChecks: { noInventedPeoplePlacesActions: true, sequencePreserved: true, explicitEmotionsPreserved: true, endingPreserved: true },
   }, understanding);
   assert(reading, "최종 해석 구조와 grounding 검사가 통과해야 합니다.");
