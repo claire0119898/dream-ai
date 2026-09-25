@@ -37,6 +37,7 @@ export type SemanticReading = {
   title: string;
   overallInterpretation: string;
   flowAssessment: string;
+  keyTransitions: string[];
   symbols: Array<{
     symbol: string;
     generalMeaning: string;
@@ -112,11 +113,12 @@ export const understandingSchema = {
 export const readingSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["title", "overallInterpretation", "flowAssessment", "symbols", "integratedInterpretation", "traditionalInterpretation", "psychologicalInterpretation", "fortuneFlow", "oneSentenceSummary", "disclaimer", "groundingChecks"],
+  required: ["title", "overallInterpretation", "flowAssessment", "keyTransitions", "symbols", "integratedInterpretation", "traditionalInterpretation", "psychologicalInterpretation", "fortuneFlow", "oneSentenceSummary", "disclaimer", "groundingChecks"],
   properties: {
     title: { type: "string", minLength: 4, maxLength: 50 },
-    overallInterpretation: { type: "string", minLength: 120, maxLength: 520 },
+    overallInterpretation: { type: "string", minLength: 180, maxLength: 700 },
     flowAssessment: { type: "string", minLength: 2, maxLength: 80 },
+    keyTransitions: { type: "array", maxItems: 5, items: { type: "string", minLength: 5, maxLength: 100 } },
     symbols: {
       type: "array", minItems: 2, maxItems: 7,
       items: {
@@ -124,17 +126,17 @@ export const readingSchema = {
         required: ["symbol", "generalMeaning", "meaningInThisDream", "connectedMeaning", "sourceSceneOrders"],
         properties: {
           symbol: { type: "string", minLength: 2, maxLength: 100 },
-          generalMeaning: { type: "string", minLength: 25, maxLength: 260 },
-          meaningInThisDream: { type: "string", minLength: 45, maxLength: 360 },
-          connectedMeaning: { type: "string", minLength: 25, maxLength: 300 },
+          generalMeaning: { type: "string", minLength: 40, maxLength: 360 },
+          meaningInThisDream: { type: "string", minLength: 90, maxLength: 560 },
+          connectedMeaning: { type: "string", minLength: 50, maxLength: 420 },
           sourceSceneOrders: { type: "array", minItems: 1, maxItems: 4, items: { type: "integer", minimum: 1, maximum: 10 } },
         },
       },
     },
-    integratedInterpretation: { type: "string", minLength: 350, maxLength: 1800 },
-    traditionalInterpretation: { type: "string", minLength: 80, maxLength: 600 },
-    psychologicalInterpretation: { type: "string", minLength: 80, maxLength: 600 },
-    fortuneFlow: { type: "string", minLength: 60, maxLength: 420 },
+    integratedInterpretation: { type: "string", minLength: 650, maxLength: 2400 },
+    traditionalInterpretation: { type: "string", minLength: 140, maxLength: 850 },
+    psychologicalInterpretation: { type: "string", minLength: 140, maxLength: 850 },
+    fortuneFlow: { type: "string", minLength: 100, maxLength: 600 },
     oneSentenceSummary: { type: "string", minLength: 20, maxLength: 220 },
     disclaimer: { type: "string", minLength: 30, maxLength: 240 },
     groundingChecks: {
@@ -149,7 +151,10 @@ export const readingSchema = {
 } as const;
 
 const INTERNAL_LANGUAGE = /\b(?:AI|GPT|OpenAI|LLM|API|prompt|token|model|grounding|confidence|ambiguity)\b|인공지능|프롬프트|토큰|주체가\s*(?:원문에\s*)?(?:없|나오지)|원문에\s*없는|파서|파싱|검증(?:된| 결과)|사실관계|추출(?:된| 결과)|물살을\s*변하는\s*행동|(?:^|\s)이(?:$|[.!?])/iu;
-const PREDICTION = /반드시|틀림없이|무조건|복권|당첨|죽게\s*됩니다|임신하게\s*됩니다|재물이\s*들어옵니다|사업이\s*성공합니다|취업이\s*확정됩니다|사고가\s*생깁니다/iu;
+const PREDICTION = /반드시|틀림없이|무조건|복권|당첨|죽게\s*됩니다|임신하게\s*됩니다|재물이\s*들어옵니다|사업이\s*성공합니다|취업이\s*확정됩니다|사고가\s*생깁니다|(?:행운|변화|기회|성공)[을를]?\s*예고합니다/iu;
+const POSITIVE_EMOTION = /행복|기쁨|즐거|편안|홀가분|안도|개방감|황홀|평온|신나/u;
+const NEGATIVE_EMOTION = /공포|두려|불안|무서|답답|고통|슬픔|분노|초조|괴로/u;
+const INVENTED_NEGATIVE_CONTEXT = /(?:현재|삶|내면|심리|현실).{0,20}(?:혼란|갈등|방향(?:을|감각)?\s*(?:잃|상실)|통제력\s*상실|복잡한\s*문제|어려움)|(?:혼란|갈등|방향\s*상실|통제력\s*상실)(?:한|의)?\s*(?:상태|상황)/u;
 
 function object(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -199,13 +204,17 @@ function nullable(value: unknown) {
   return String(value).trim() || null;
 }
 
+function paragraphs(value: string) {
+  return value.split(/\n\s*\n/gu).map((item) => item.replace(/\s+/gu, " ").trim()).filter(Boolean);
+}
+
 export function isMeaningfulLabel(value: string) {
   const text = value.trim();
   return text.length >= 2 && !/^(?:이|가|은|는|을|를|것|그것|행동|상태|요소)$/u.test(text) && !/을\s*변하는\s*행동/u.test(text);
 }
 
 export function validateReading(value: unknown, understanding: DreamUnderstanding): SemanticReading | null {
-  if (!object(value) || !Array.isArray(value.symbols) || !object(value.groundingChecks)) return null;
+  if (!object(value) || !Array.isArray(value.symbols) || !Array.isArray(value.keyTransitions) || !object(value.groundingChecks)) return null;
   const symbols = value.symbols.filter(object).map((scene) => ({
     symbol: String(scene.symbol ?? "").trim(),
     generalMeaning: String(scene.generalMeaning ?? "").trim(),
@@ -216,7 +225,9 @@ export function validateReading(value: unknown, understanding: DreamUnderstandin
   const reading: SemanticReading = {
     title: String(value.title ?? "").trim(),
     overallInterpretation: String(value.overallInterpretation ?? "").trim(),
-    flowAssessment: String(value.flowAssessment ?? "").trim(), symbols,
+    flowAssessment: String(value.flowAssessment ?? "").trim(),
+    keyTransitions: value.keyTransitions.map(String).map((item) => item.trim()).filter(Boolean).slice(0, 5),
+    symbols,
     integratedInterpretation: String(value.integratedInterpretation ?? "").trim(),
     traditionalInterpretation: String(value.traditionalInterpretation ?? "").trim(),
     psychologicalInterpretation: String(value.psychologicalInterpretation ?? "").trim(),
@@ -230,10 +241,31 @@ export function validateReading(value: unknown, understanding: DreamUnderstandin
       endingPreserved: value.groundingChecks.endingPreserved === true,
     },
   };
-  const allText = [reading.title, reading.overallInterpretation, reading.flowAssessment, ...symbols.flatMap((scene) => [scene.symbol, scene.generalMeaning, scene.meaningInThisDream, scene.connectedMeaning]), reading.integratedInterpretation, reading.traditionalInterpretation, reading.psychologicalInterpretation, reading.fortuneFlow, reading.oneSentenceSummary, reading.disclaimer].join(" ");
+  const allText = [reading.title, reading.overallInterpretation, reading.flowAssessment, ...reading.keyTransitions, ...symbols.flatMap((scene) => [scene.symbol, scene.generalMeaning, scene.meaningInThisDream, scene.connectedMeaning]), reading.integratedInterpretation, reading.traditionalInterpretation, reading.psychologicalInterpretation, reading.fortuneFlow, reading.oneSentenceSummary, reading.disclaimer].join(" ");
   const maxOrder = understanding.scenes.length;
-  if (reading.title.length < 4 || reading.overallInterpretation.length < 90 || symbols.length < 2 || symbols.length > 7 || reading.integratedInterpretation.length < 250 || reading.traditionalInterpretation.length < 60 || reading.psychologicalInterpretation.length < 60 || reading.fortuneFlow.length < 45 || reading.oneSentenceSummary.length < 15 || reading.disclaimer.length < 20 || INTERNAL_LANGUAGE.test(allText) || PREDICTION.test(allText)) return null;
-  if (symbols.some((scene) => !isMeaningfulLabel(scene.symbol) || scene.generalMeaning.length < 20 || scene.meaningInThisDream.length < 35 || scene.connectedMeaning.length < 20 || !scene.sourceSceneOrders.length || scene.sourceSceneOrders.some((order) => order < 1 || order > maxOrder))) return null;
+  const isLongDream = understanding.summaryOfDream.length >= 140 || understanding.scenes.length >= 3;
+  const integratedParagraphs = paragraphs(reading.integratedInterpretation);
+  const minimumSymbols = isLongDream ? 3 : 2;
+  const minimumIntegratedLength = isLongDream ? 650 : 420;
+  const minimumParagraphs = isLongDream ? 4 : 3;
+  const minimumTotalLength = isLongDream ? 2200 : 1250;
+  if (reading.title.length < 4 || reading.overallInterpretation.length < 170 || symbols.length < minimumSymbols || symbols.length > 7 || reading.integratedInterpretation.length < minimumIntegratedLength || reading.traditionalInterpretation.length < 130 || reading.psychologicalInterpretation.length < 130 || reading.fortuneFlow.length < 90 || reading.oneSentenceSummary.length < 20 || reading.disclaimer.length < 20 || integratedParagraphs.length < minimumParagraphs || integratedParagraphs.length > 7 || allText.length < minimumTotalLength || INTERNAL_LANGUAGE.test(allText) || PREDICTION.test(allText)) return null;
+  if (understanding.transitions.length && reading.keyTransitions.length === 0) return null;
+  if (symbols.some((scene) => !isMeaningfulLabel(scene.symbol) || scene.generalMeaning.length < 35 || scene.meaningInThisDream.length < 80 || scene.connectedMeaning.length < 45 || !scene.sourceSceneOrders.length || scene.sourceSceneOrders.some((order) => order < 1 || order > maxOrder))) return null;
+  const explicitEmotionText = [
+    ...understanding.scenes.map((scene) => scene.emotion ?? ""),
+    understanding.emotionalArc.beginning ?? "",
+    understanding.emotionalArc.middle ?? "",
+    understanding.emotionalArc.ending ?? "",
+  ].join(" ");
+  const contextualText = [
+    reading.overallInterpretation,
+    ...symbols.flatMap((scene) => [scene.meaningInThisDream, scene.connectedMeaning]),
+    reading.integratedInterpretation,
+    reading.psychologicalInterpretation,
+    reading.fortuneFlow,
+  ].join(" ");
+  if (POSITIVE_EMOTION.test(explicitEmotionText) && !NEGATIVE_EMOTION.test(explicitEmotionText) && INVENTED_NEGATIVE_CONTEXT.test(contextualText)) return null;
   if (Object.values(reading.groundingChecks).some((passed) => !passed)) return null;
   return reading;
 }
@@ -258,6 +290,7 @@ export function toDreamInterpretation(reading: SemanticReading): DreamInterpreta
     traditionalInterpretation: reading.traditionalInterpretation,
     psychologicalInterpretation: reading.psychologicalInterpretation,
     flowAssessment: reading.flowAssessment,
+    keyTransitions: reading.keyTransitions,
     fortuneFlow: reading.fortuneFlow,
     oneSentenceSummary: reading.oneSentenceSummary,
     disclaimer: reading.disclaimer,
@@ -310,6 +343,7 @@ export function createSemanticFallback(dream: string, analysis: DreamAnalysis): 
     traditionalInterpretation: hotSpring ? "전통적인 해몽에서는 맑은 물과 밝은 햇빛을 기운이 맑아지고 상황이 트이는 이미지로 봅니다. 공간이 넓어지고 그 안에서 활발히 움직이는 모습도 막힌 흐름이 열리고 선택지가 늘어나는 길한 방향으로 읽는 경우가 많습니다. 다만 이는 상징적인 흐름이며 특정한 미래 사건을 보장하지는 않습니다." : "전통적인 해몽에서는 꿈의 중심 상징과 마지막 장면이 밝고 편안한지, 막히고 두려운지를 기준으로 흐름을 읽습니다. 이는 상징적인 방향을 참고하는 풀이이며 특정한 미래 사건을 확정하지 않습니다.",
     psychologicalInterpretation: hotSpring ? "심리적으로는 안정적이지만 정해진 흐름에서 더 넓은 선택권과 자유를 원하는 마음이 커질 때 나타날 수 있는 꿈입니다. 수동적으로 이동하다 직접 힘차게 헤엄친 변화는 스스로 결정하고 움직이고 싶은 욕구와 에너지가 되살아나는 과정으로 읽을 수 있습니다." : "심리적으로는 꿈에서 가장 강했던 감정과 마지막 행동이 현재 마음의 필요를 비추는 경우가 있습니다. 입력에 드러난 변화가 있다면, 익숙한 상태를 유지하려는 마음과 새로운 방향으로 움직이려는 마음 사이의 흐름으로 연결할 수 있습니다.",
     flowAssessment: hotSpring ? "매우 긍정적 · 해방 · 회복" : "전환",
+    keyTransitions: hotSpring ? ["실내 → 야외", "미로 → 탁 트인 공간", "인공조명 → 따뜻한 햇빛", "물살에 몸을 맡김 → 스스로 힘차게 헤엄침"] : [],
     fortuneFlow: hotSpring ? "전체적으로 길몽 쪽에 가깝습니다. 밝고 넓어지는 공간, 맑은 물, 따뜻한 햇빛에 더해 마지막의 행복감과 능동적인 헤엄이 모두 열림과 회복의 방향을 가리키기 때문입니다. 이는 미래 사건의 확정이 아니라 현재의 긍정적인 변화 가능성을 보여주는 상징입니다." : "좋고 나쁨을 단정하기보다 전환의 성격이 강한 꿈입니다. 마지막에 남은 감정과 행동이 편안하고 능동적일수록 회복과 긍정의 방향으로, 두렵고 막혀 있을수록 주의와 긴장의 방향으로 읽습니다.",
     oneSentenceSummary: hotSpring ? "정해진 흐름을 지나 더 넓고 자유로운 가능성을 발견하고, 그 안에서 자신의 에너지와 주도권을 되찾는 꿈입니다." : "꿈의 시작에서 결말로 이어진 감정과 행동의 변화가 지금 마음이 향하는 방향을 보여주는 꿈입니다.",
     disclaimer: DEFAULT_INTERPRETATION_CAUTION,

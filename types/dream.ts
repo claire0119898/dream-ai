@@ -71,6 +71,7 @@ export interface DreamInterpretation {
   disclaimer?: string;
   flowAssessment?: string;
   fortuneFlow?: string;
+  keyTransitions?: string[];
 }
 
 export type DreamSymbolInterpretation = {
@@ -109,6 +110,7 @@ export interface ContextualDreamInterpretation {
   disclaimer?: string;
   flowAssessment?: string;
   fortuneFlow?: string;
+  keyTransitions?: string[];
 }
 
 export type DreamClarification = {

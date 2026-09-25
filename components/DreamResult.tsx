@@ -25,17 +25,21 @@ export default function DreamResult({ interpretation, onReset }: DreamResultProp
     </header>
 
     <article className={sectionClass}><h3 className="text-xl font-bold text-white sm:text-2xl">전체 해몽</h3><div className="mt-4"><Paragraphs text={interpretation.overallInterpretation || interpretation.coreConclusion} /></div></article>
+    {Boolean(interpretation.keyTransitions?.length) && <section className="rounded-2xl border border-violet-300/20 bg-violet-400/[0.06] px-5 py-5 sm:px-7 sm:py-6" aria-labelledby="transitions-title">
+      <h3 id="transitions-title" className="text-sm font-bold tracking-[0.08em] text-violet-200">꿈의 흐름을 바꾼 전환</h3>
+      <ul className="mt-4 grid gap-2 sm:grid-cols-2">{interpretation.keyTransitions?.map((transition) => <li key={transition} className="rounded-xl bg-black/15 px-4 py-3 text-sm font-semibold leading-6 text-slate-100 sm:text-base">{transition}</li>)}</ul>
+    </section>}
     <section className={sectionClass} aria-labelledby="symbols-title">
       <h3 id="symbols-title" className="text-xl font-bold text-white sm:text-2xl">핵심 상징 해석</h3>
       <ol className="mt-5 space-y-7">{symbols.slice(0, 7).map((item, index) => <li key={`${item.symbol}-${index}`} className="grid grid-cols-[2rem_1fr] gap-3">
         <span className="mt-0.5 grid size-8 place-items-center rounded-full bg-violet-400/15 text-sm font-bold text-violet-100">{index + 1}</span>
-        <div><h4 className="text-lg font-bold text-white">{item.symbol}</h4><p className="mt-2 text-sm leading-[1.8] text-slate-300 sm:text-base">{item.generalMeaning}</p><p className="mt-2 text-sm leading-[1.8] text-slate-100 sm:text-base">{item.meaningInThisDream}</p>{item.connectedMeaning && <p className="mt-2 text-sm leading-[1.8] text-violet-100/90 sm:text-base">{item.connectedMeaning}</p>}</div>
+        <div><h4 className="text-lg font-bold text-white">{item.symbol}</h4><p className="mt-3 text-xs font-bold tracking-[0.08em] text-slate-400">일반적인 의미</p><p className="mt-1 text-sm leading-[1.85] text-slate-300 sm:text-base">{item.generalMeaning}</p><p className="mt-3 text-xs font-bold tracking-[0.08em] text-violet-300">이 꿈에서는</p><p className="mt-1 text-sm leading-[1.85] text-slate-100 sm:text-base">{item.meaningInThisDream}</p>{item.connectedMeaning && <><p className="mt-3 text-xs font-bold tracking-[0.08em] text-sky-300">앞뒤 장면과 연결하면</p><p className="mt-1 text-sm leading-[1.85] text-sky-50/90 sm:text-base">{item.connectedMeaning}</p></>}</div>
       </li>)}</ol>
     </section>
-    <article className={sectionClass}><h3 className="text-xl font-bold text-white sm:text-2xl">종합 풀이</h3><div className="mt-4"><Paragraphs text={integrated} /></div></article>
+    <article className={sectionClass}><h3 className="text-xl font-bold text-white sm:text-2xl">이 꿈을 하나의 이야기로 해석하면</h3><div className="mt-4"><Paragraphs text={integrated} /></div></article>
     <article className={sectionClass}><h3 className="text-xl font-bold text-white sm:text-2xl">전통적인 해몽</h3><div className="mt-4"><Paragraphs text={traditional} /></div></article>
     <article className={sectionClass}><h3 className="text-xl font-bold text-white sm:text-2xl">심리적인 해석</h3><div className="mt-4"><Paragraphs text={psychological} /></div></article>
-    <article className={sectionClass}><h3 className="text-xl font-bold text-white sm:text-2xl">길몽/주의 흐름</h3><div className="mt-4"><Paragraphs text={interpretation.fortuneFlow || "좋고 나쁨을 단정하기보다 꿈의 감정과 마지막 장면이 향한 방향을 중심으로 보는 꿈입니다."} /></div></article>
+    <article className={sectionClass}><h3 className="text-xl font-bold text-white sm:text-2xl">길몽인가?</h3><div className="mt-4"><Paragraphs text={interpretation.fortuneFlow || "좋고 나쁨을 단정하기보다 꿈의 감정과 마지막 장면이 향한 방향을 중심으로 보는 꿈입니다."} /></div></article>
     <article className="my-7 rounded-2xl border border-violet-300/25 bg-violet-400/[0.08] p-5 sm:my-9 sm:p-7"><h3 className="text-lg font-bold text-white">한 문장 해석</h3><p className="mt-3 text-base font-medium leading-[1.8] text-violet-50 sm:text-lg">{interpretation.oneSentenceSummary || interpretation.coreConclusion}</p></article>
     <aside className="border-t border-white/10 py-6 text-sm leading-[1.8] text-slate-400"><h3 className="font-semibold text-slate-300">참고 안내</h3><p className="mt-1">{interpretation.disclaimer || interpretation.caution}</p></aside>
     <div className="py-7 text-center"><button type="button" onClick={onReset} className="min-h-12 rounded-2xl border border-white/15 bg-white/5 px-6 py-3 text-sm font-semibold text-slate-200 transition hover:border-violet-300/40 hover:bg-violet-400/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300">다른 꿈 풀이하기</button></div>

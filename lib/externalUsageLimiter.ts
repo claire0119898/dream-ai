@@ -18,8 +18,8 @@ type ReserveInput = {
 
 type MemoryEntry = { count: number; expiresAt: number };
 type InterpretationCacheEnvelope = {
-  schemaVersion: "interpretation-v12";
-  promptVersion: "dream-reading-v12";
+  schemaVersion: "interpretation-v14";
+  promptVersion: "emotion-first-reading-v14";
   interpretation: DreamInterpretation;
 };
 type MemoryCacheEntry = {
@@ -57,15 +57,15 @@ function limiterKeys(input: ReserveInput) {
 }
 
 function interpretationCacheKey(dreamHash: string) {
-  return `jamgyeol:interpretation:v12:${dreamHash}`;
+  return `jamgyeol:interpretation:v14:${dreamHash}`;
 }
 
 function cacheEnvelope(
   interpretation: DreamInterpretation,
 ): InterpretationCacheEnvelope {
   return {
-    schemaVersion: "interpretation-v12",
-    promptVersion: "dream-reading-v12",
+    schemaVersion: "interpretation-v14",
+    promptVersion: "emotion-first-reading-v14",
     interpretation,
   };
 }
@@ -74,8 +74,8 @@ function cachedInterpretation(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const envelope = value as Partial<InterpretationCacheEnvelope>;
   if (
-    envelope.schemaVersion !== "interpretation-v12" ||
-    envelope.promptVersion !== "dream-reading-v12"
+    envelope.schemaVersion !== "interpretation-v14" ||
+    envelope.promptVersion !== "emotion-first-reading-v14"
   ) {
     return null;
   }
@@ -94,7 +94,8 @@ function cachedInterpretation(value: unknown) {
     typeof interpretation.traditionalInterpretation !== "string" ||
     typeof interpretation.psychologicalInterpretation !== "string" ||
     typeof interpretation.fortuneFlow !== "string" ||
-    typeof interpretation.oneSentenceSummary !== "string"
+    typeof interpretation.oneSentenceSummary !== "string" ||
+    !Array.isArray(interpretation.keyTransitions)
   ) return null;
   return interpretation;
 }
