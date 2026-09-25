@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test:scenes": "node --no-warnings --experimental-strip-types scripts/verify-scene-analysis.mjs",
+    "test:narrative": "node --no-warnings --experimental-strip-types scripts/verify-narrative-pipeline.mjs",
+    "test:api": "node --no-warnings --experimental-strip-types scripts/verify-narrative-api.mjs",
     "test:result": "node --no-warnings --experimental-strip-types scripts/verify-result-presentation.mjs",
     "validate:dreams": "node scripts/validate-dream-dictionary.mjs",
     "check:copy": "node scripts/check-korean-copy.mjs",

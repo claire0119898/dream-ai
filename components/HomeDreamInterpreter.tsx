@@ -9,8 +9,9 @@ import AdPlaceholder from "./AdPlaceholder";
 import DreamClarification from "./DreamClarification";
 import DreamInput from "./DreamInput";
 import DreamResult from "./DreamResult";
+import { isNarrativeInterpretation } from "../lib/dreamNarrative";
 
-const CLIENT_REQUEST_TIMEOUT_MS = 55_000;
+const CLIENT_REQUEST_TIMEOUT_MS = 65_000;
 
 export default function HomeDreamInterpreter() {
   const [dream, setDream] = useState("");
@@ -35,6 +36,7 @@ export default function HomeDreamInterpreter() {
     }, CLIENT_REQUEST_TIMEOUT_MS);
 
     setLoading(true);
+    setInterpretation(null);
     setError("");
     setNotice(null);
 
@@ -62,6 +64,7 @@ export default function HomeDreamInterpreter() {
         return;
       }
 
+      if (!isNarrativeInterpretation(data.interpretation)) throw new Error("꿈풀이를 완성하지 못했습니다. 잠시 후 다시 시도해 주세요.");
       setInterpretation(data.interpretation);
       setClarification(null);
       setNotice(data.notice ?? null);
@@ -120,7 +123,7 @@ export default function HomeDreamInterpreter() {
 
       <DreamInput dream={dream} setDream={updateDream} onInterpret={() => void interpretDream()} loading={loading} />
 
-      {error && <p role="alert" className="mx-4 mt-4 max-w-5xl rounded-2xl border border-rose-400/30 bg-rose-500/10 p-4 text-center text-sm leading-6 text-rose-200 sm:mx-6 lg:mx-auto">{error}</p>}
+      {error && <div role="alert" className="mx-4 mt-4 max-w-5xl rounded-2xl border border-rose-400/30 bg-rose-500/10 p-4 text-center text-sm leading-6 text-rose-200 sm:mx-6 lg:mx-auto"><p>{error}</p><button type="button" disabled={loading} onClick={() => void interpretDream(clarification?.key)} className="mt-3 min-h-11 rounded-xl border border-rose-300/30 px-4 py-2 font-semibold disabled:opacity-50">다시 풀이하기</button></div>}
 
       <AdPlaceholder placement="input" className="mt-7" />
       {clarification && (

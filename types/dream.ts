@@ -42,6 +42,7 @@ export type DreamAnalysis = {
 };
 
 export interface DreamInterpretation {
+  narrative?: DreamNarrative;
   title: string;
   factVersion: "v1";
   coreConclusion: string;
@@ -73,6 +74,15 @@ export interface DreamInterpretation {
   fortuneFlow?: string;
   keyTransitions?: string[];
 }
+
+/** 최종 화면용 읽기 계약. evidence와 분석 결과는 이 타입에 포함하지 않습니다. */
+export type DreamNarrative = {
+  version: "v16";
+  opening: string;
+  paragraphs: Array<{ text: string; highlight: string }>;
+  coreMessage: string;
+  flow: { label: "긍정" | "긴장" | "전환" | "회복" | "관계" | "중립"; reading: string };
+};
 
 export type DreamSymbolInterpretation = {
   symbol: string;

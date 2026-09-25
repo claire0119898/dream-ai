@@ -1,47 +1,42 @@
 import type { DreamInterpretation } from "../types/dream";
+import { isNarrativeInterpretation, READING_CAUTION } from "../lib/dreamNarrative";
 
 type DreamResultProps = { interpretation: DreamInterpretation | null; onReset: () => void };
 
-function Paragraphs({ text }: { text: string }) {
-  return <div className="space-y-4">{text.split(/\n\s*\n/gu).filter(Boolean).map((paragraph, index) => (
-    <p key={`${index}-${paragraph.slice(0, 24)}`} className="break-words text-[0.95rem] leading-[1.9] text-slate-200 sm:text-base">{paragraph}</p>
-  ))}</div>;
+function HighlightedParagraph({ text, highlight }: { text: string; highlight: string }) {
+  const index = highlight ? text.indexOf(highlight) : -1;
+  if (index < 0) return <>{text}</>;
+  return <>{text.slice(0, index)}<strong className="font-semibold text-violet-100">{highlight}</strong>{text.slice(index + highlight.length)}</>;
 }
 
-const sectionClass = "border-t border-white/10 py-7 sm:py-9";
-
 export default function DreamResult({ interpretation, onReset }: DreamResultProps) {
-  if (!interpretation) return null;
-  const symbols = interpretation.symbols ?? interpretation.keyScenes.map((scene) => ({ symbol: scene.title, generalMeaning: scene.meaning, meaningInThisDream: scene.meaning, connectedMeaning: "" }));
-  const integrated = interpretation.integratedMeaning || interpretation.integratedInterpretation;
-  const traditional = interpretation.traditionalInterpretation || "전통적인 해몽에서는 꿈에 나온 상징의 방향을 참고해 흐름을 읽습니다. 다만 꿈이 특정한 미래 사건을 확정하는 것은 아닙니다.";
-  const psychological = interpretation.psychologicalInterpretation || interpretation.realLifeConnections.join(" ") || "이 꿈은 마음에 남은 감정과 변화의 방향을 비추는 장면으로 읽을 수 있습니다.";
-
-  return <section id="result" aria-live="polite" aria-labelledby="dream-result-title" className="mx-4 mt-8 max-w-[52rem] scroll-mt-5 sm:mx-6 lg:mx-auto">
-    <header className="pb-7 sm:pb-9">
-      <p className="text-xs font-semibold tracking-[0.18em] text-violet-300">DREAM READING</p>
-      <h2 id="dream-result-title" className="mt-2 text-2xl font-semibold tracking-[-0.02em] text-white sm:text-3xl">{interpretation.title}</h2>
-      {interpretation.flowAssessment && <p className="mt-4 inline-flex rounded-full border border-violet-300/25 bg-violet-400/10 px-3 py-1.5 text-sm font-semibold text-violet-100">{interpretation.flowAssessment}</p>}
-    </header>
-
-    <article className={sectionClass}><h3 className="text-xl font-bold text-white sm:text-2xl">전체 해몽</h3><div className="mt-4"><Paragraphs text={interpretation.overallInterpretation || interpretation.coreConclusion} /></div></article>
-    {Boolean(interpretation.keyTransitions?.length) && <section className="rounded-2xl border border-violet-300/20 bg-violet-400/[0.06] px-5 py-5 sm:px-7 sm:py-6" aria-labelledby="transitions-title">
-      <h3 id="transitions-title" className="text-sm font-bold tracking-[0.08em] text-violet-200">꿈의 흐름을 바꾼 전환</h3>
-      <ul className="mt-4 grid gap-2 sm:grid-cols-2">{interpretation.keyTransitions?.map((transition) => <li key={transition} className="rounded-xl bg-black/15 px-4 py-3 text-sm font-semibold leading-6 text-slate-100 sm:text-base">{transition}</li>)}</ul>
-    </section>}
-    <section className={sectionClass} aria-labelledby="symbols-title">
-      <h3 id="symbols-title" className="text-xl font-bold text-white sm:text-2xl">핵심 상징 해석</h3>
-      <ol className="mt-5 space-y-7">{symbols.slice(0, 7).map((item, index) => <li key={`${item.symbol}-${index}`} className="grid grid-cols-[2rem_1fr] gap-3">
-        <span className="mt-0.5 grid size-8 place-items-center rounded-full bg-violet-400/15 text-sm font-bold text-violet-100">{index + 1}</span>
-        <div><h4 className="text-lg font-bold text-white">{item.symbol}</h4><p className="mt-3 text-xs font-bold tracking-[0.08em] text-slate-400">일반적인 의미</p><p className="mt-1 text-sm leading-[1.85] text-slate-300 sm:text-base">{item.generalMeaning}</p><p className="mt-3 text-xs font-bold tracking-[0.08em] text-violet-300">이 꿈에서는</p><p className="mt-1 text-sm leading-[1.85] text-slate-100 sm:text-base">{item.meaningInThisDream}</p>{item.connectedMeaning && <><p className="mt-3 text-xs font-bold tracking-[0.08em] text-sky-300">앞뒤 장면과 연결하면</p><p className="mt-1 text-sm leading-[1.85] text-sky-50/90 sm:text-base">{item.connectedMeaning}</p></>}</div>
-      </li>)}</ol>
+  // 구형 결과나 불완전한 문구를 정상 해몽 화면에 끼워 넣지 않습니다.
+  if (!isNarrativeInterpretation(interpretation)) return null;
+  const reading = interpretation.narrative;
+  return (
+    <section id="result" aria-labelledby="dream-result-title" className="mx-4 mt-12 max-w-[46rem] scroll-mt-28 sm:mx-6 lg:mx-auto">
+      <header className="border-b border-white/10 pb-7 sm:pb-9">
+        <p className="text-xs font-semibold tracking-[0.18em] text-violet-300">꿈에 담긴 이야기</p>
+        <h2 id="dream-result-title" className="mt-3 text-2xl font-semibold leading-snug tracking-[-0.025em] text-white sm:text-3xl">{interpretation.title}</h2>
+        <p className="mt-5 break-words text-base font-medium leading-[1.95] text-slate-100 sm:text-lg">{reading.opening}</p>
+      </header>
+      <article aria-label="꿈의 상세 풀이" className="space-y-6 py-8 sm:space-y-7 sm:py-10">
+        {reading.paragraphs.map((paragraph, index) => (
+          <p key={index} className="break-words text-[1rem] leading-[2] text-slate-300 sm:text-[1.05rem]">
+            <HighlightedParagraph {...paragraph} />
+          </p>
+        ))}
+      </article>
+      <blockquote className="border-l-2 border-violet-300 bg-violet-400/[0.06] px-5 py-5 sm:px-7 sm:py-6">
+        <p className="text-xs font-semibold tracking-wide text-violet-300">이 꿈이 남기는 한 문장</p>
+        <p className="mt-3 break-words text-lg font-semibold leading-[1.85] text-violet-50 sm:text-xl">{reading.coreMessage}</p>
+      </blockquote>
+      <section aria-labelledby="dream-flow-title" className="py-8 sm:py-10">
+        <h3 id="dream-flow-title" className="text-lg font-semibold text-white">전체 흐름 · {reading.flow.label}</h3>
+        <p className="mt-3 text-base leading-[1.95] text-slate-300">{reading.flow.reading}</p>
+      </section>
+      <aside className="border-t border-white/10 pt-5 text-xs leading-6 text-slate-400">{READING_CAUTION}</aside>
+      <div className="py-7 text-center"><button type="button" onClick={onReset} className="min-h-12 rounded-2xl border border-white/15 bg-white/5 px-6 py-3 text-sm font-semibold text-slate-200 transition hover:border-violet-300/40 hover:bg-violet-400/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300">다른 꿈 풀이하기</button></div>
     </section>
-    <article className={sectionClass}><h3 className="text-xl font-bold text-white sm:text-2xl">이 꿈을 하나의 이야기로 해석하면</h3><div className="mt-4"><Paragraphs text={integrated} /></div></article>
-    <article className={sectionClass}><h3 className="text-xl font-bold text-white sm:text-2xl">전통적인 해몽</h3><div className="mt-4"><Paragraphs text={traditional} /></div></article>
-    <article className={sectionClass}><h3 className="text-xl font-bold text-white sm:text-2xl">심리적인 해석</h3><div className="mt-4"><Paragraphs text={psychological} /></div></article>
-    <article className={sectionClass}><h3 className="text-xl font-bold text-white sm:text-2xl">길몽인가?</h3><div className="mt-4"><Paragraphs text={interpretation.fortuneFlow || "좋고 나쁨을 단정하기보다 꿈의 감정과 마지막 장면이 향한 방향을 중심으로 보는 꿈입니다."} /></div></article>
-    <article className="my-7 rounded-2xl border border-violet-300/25 bg-violet-400/[0.08] p-5 sm:my-9 sm:p-7"><h3 className="text-lg font-bold text-white">한 문장 해석</h3><p className="mt-3 text-base font-medium leading-[1.8] text-violet-50 sm:text-lg">{interpretation.oneSentenceSummary || interpretation.coreConclusion}</p></article>
-    <aside className="border-t border-white/10 py-6 text-sm leading-[1.8] text-slate-400"><h3 className="font-semibold text-slate-300">참고 안내</h3><p className="mt-1">{interpretation.disclaimer || interpretation.caution}</p></aside>
-    <div className="py-7 text-center"><button type="button" onClick={onReset} className="min-h-12 rounded-2xl border border-white/15 bg-white/5 px-6 py-3 text-sm font-semibold text-slate-200 transition hover:border-violet-300/40 hover:bg-violet-400/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300">다른 꿈 풀이하기</button></div>
-  </section>;
+  );
 }

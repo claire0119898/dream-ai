@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { EXTERNAL_USAGE_LIMITS } from "./dreamConfig";
+import { EXTERNAL_USAGE_LIMITS } from "./dreamConfig.ts";
+import { isNarrativeInterpretation } from "./dreamNarrative.ts";
 import type { DreamInterpretation } from "../types/dream";
 
 export type UsageDecision =
@@ -18,8 +19,8 @@ type ReserveInput = {
 
 type MemoryEntry = { count: number; expiresAt: number };
 type InterpretationCacheEnvelope = {
-  schemaVersion: "interpretation-v14";
-  promptVersion: "emotion-first-reading-v14";
+  schemaVersion: "interpretation-v16";
+  promptVersion: "narrative-v16";
   interpretation: DreamInterpretation;
 };
 type MemoryCacheEntry = {
@@ -31,6 +32,7 @@ export interface ExternalUsageStore {
   reserve(input: ReserveInput): Promise<UsageDecision>;
   getCached(dreamHash: string): Promise<unknown | null>;
   setCached(dreamHash: string, interpretation: DreamInterpretation): Promise<void>;
+  release(dreamHash: string): Promise<void>;
 }
 
 function utcBuckets(now: Date) {
@@ -52,52 +54,34 @@ function limiterKeys(input: ReserveInput) {
     hour: `${prefix}:user:${input.identityHash}:hour:${bucket.hour}`,
     day: `${prefix}:user:${input.identityHash}:day:${bucket.day}`,
     globalDay: `${prefix}:global:day:${bucket.day}`,
-    duplicate: `${prefix}:dream:${input.dreamHash}`,
+    duplicate: `${prefix}:inflight:v16:${input.dreamHash}`,
   };
 }
 
 function interpretationCacheKey(dreamHash: string) {
-  return `jamgyeol:interpretation:v14:${dreamHash}`;
+  return `jamgyeol:interpretation:v16:${dreamHash}`;
 }
 
 function cacheEnvelope(
   interpretation: DreamInterpretation,
 ): InterpretationCacheEnvelope {
   return {
-    schemaVersion: "interpretation-v14",
-    promptVersion: "emotion-first-reading-v14",
+    schemaVersion: "interpretation-v16",
+    promptVersion: "narrative-v16",
     interpretation,
   };
 }
 
-function cachedInterpretation(value: unknown) {
+export function cachedInterpretation(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const envelope = value as Partial<InterpretationCacheEnvelope>;
   if (
-    envelope.schemaVersion !== "interpretation-v14" ||
-    envelope.promptVersion !== "emotion-first-reading-v14"
+    envelope.schemaVersion !== "interpretation-v16" ||
+    envelope.promptVersion !== "narrative-v16"
   ) {
     return null;
   }
-  const interpretation = envelope.interpretation;
-  if (
-    !interpretation ||
-    typeof interpretation !== "object" ||
-    typeof interpretation.title !== "string" ||
-    typeof interpretation.coreConclusion !== "string" ||
-    !Array.isArray(interpretation.keyScenes) ||
-    interpretation.keyScenes.length < 2 ||
-    typeof interpretation.integratedInterpretation !== "string" ||
-    !Array.isArray(interpretation.realLifeConnections) ||
-    typeof interpretation.overallInterpretation !== "string" ||
-    !Array.isArray(interpretation.symbols) ||
-    typeof interpretation.traditionalInterpretation !== "string" ||
-    typeof interpretation.psychologicalInterpretation !== "string" ||
-    typeof interpretation.fortuneFlow !== "string" ||
-    typeof interpretation.oneSentenceSummary !== "string" ||
-    !Array.isArray(interpretation.keyTransitions)
-  ) return null;
-  return interpretation;
+  return isNarrativeInterpretation(envelope.interpretation) ? envelope.interpretation : null;
 }
 
 export class MemoryExternalUsageStore implements ExternalUsageStore {
@@ -130,7 +114,7 @@ export class MemoryExternalUsageStore implements ExternalUsageStore {
     this.increment(keys.hour, now + 7_200_000, now);
     this.increment(keys.day, now + 172_800_000, now);
     this.increment(keys.globalDay, now + 172_800_000, now);
-    this.duplicates.set(keys.duplicate, now + EXTERNAL_USAGE_LIMITS.duplicateSeconds * 1000);
+    this.duplicates.set(keys.duplicate, now + 120_000);
     return "allowed";
   }
 
@@ -149,6 +133,10 @@ export class MemoryExternalUsageStore implements ExternalUsageStore {
       envelope: cacheEnvelope(interpretation),
       expiresAt: Date.now() + EXTERNAL_USAGE_LIMITS.duplicateSeconds * 1000,
     });
+  }
+
+  async release(dreamHash: string) {
+    this.duplicates.delete(limiterKeys({ identityHash: "", dreamHash }).duplicate);
   }
 
   private readCounter(key: string, now: number) {
@@ -245,7 +233,7 @@ class UpstashExternalUsageStore implements ExternalUsageStore {
         String(EXTERNAL_USAGE_LIMITS.hour),
         String(EXTERNAL_USAGE_LIMITS.day),
         String(EXTERNAL_USAGE_LIMITS.globalDay),
-        String(EXTERNAL_USAGE_LIMITS.duplicateSeconds),
+        "120",
         input.allowDuplicate ? "1" : "0",
       ]);
     if (typeof data.result !== "string") throw new Error("Usage store returned an invalid result");
@@ -269,6 +257,10 @@ class UpstashExternalUsageStore implements ExternalUsageStore {
     } catch {
       return null;
     }
+  }
+
+  async release(dreamHash: string) {
+    await this.command(["DEL", limiterKeys({ identityHash: "", dreamHash }).duplicate]);
   }
 
   async setCached(dreamHash: string, interpretation: DreamInterpretation) {
@@ -349,4 +341,9 @@ export async function cacheInterpretation(dream: string, interpretation: DreamIn
   try {
     await store.setCached(hashPrivateValue(normalizedDreamFingerprint(dream)), interpretation);
   } catch {}
+}
+
+export async function releaseExternalAttempt(dream: string) {
+  try { await usageStore()?.release(hashPrivateValue(normalizedDreamFingerprint(dream))); }
+  catch { /* 짧은 잠금 만료가 실패 시 복구합니다. */ }
 }
