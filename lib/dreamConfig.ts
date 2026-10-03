@@ -31,3 +31,12 @@ export const DREAM_CONTEXT_ENTRY_LIMIT = positiveInteger(
   8
 );
 export const DEFAULT_DREAM_MODEL = "gpt-4.1";
+export const DEFAULT_DREAM_ANALYSIS_MODEL = "gpt-4.1-mini";
+
+export type DreamProductionPipeline = "two-step" | "baseline-3step";
+
+export function resolveDreamPipeline(value: string | undefined): DreamProductionPipeline {
+  return value?.trim() === "baseline-3step" ? "baseline-3step" : "two-step";
+}
+
+export const DREAM_PIPELINE = resolveDreamPipeline(process.env.DREAM_PIPELINE);

@@ -20,6 +20,8 @@
 
 # production
 /build
+/artifacts/dream-pipeline-comparison/
+/artifacts/dream-pipeline-comparison-round2/
 
 # misc
 .DS_Store

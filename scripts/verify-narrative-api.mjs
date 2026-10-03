@@ -7,11 +7,13 @@ import { dungeonDream, dungeonUnderstanding, dungeonReading } from "./narrative-
 
 let mode = "unauthorized";
 let providerCalls = 0;
+const providerRequests = [];
 const mock = http.createServer(async (request, response) => {
   const chunks = [];
   for await (const chunk of request) chunks.push(chunk);
   const body = JSON.parse(Buffer.concat(chunks).toString());
   providerCalls++;
+  providerRequests.push({ model: body.model, stage: body.text.format.name });
   assert.equal(request.headers.authorization, "Bearer local-test-only");
   response.setHeader("Content-Type", "application/json");
   if (mode === "unauthorized") {
@@ -21,9 +23,10 @@ const mock = http.createServer(async (request, response) => {
   if (mode === "timeout") return;
   const stage = body.text.format.name;
   let output = stage.includes("understanding") ? dungeonUnderstanding : dungeonReading;
+  if (mode === "clarification" && stage.includes("understanding")) output = { ...dungeonUnderstanding, needsClarification: true, clarificationQuestion: "마지막에 무엇을 막으려 했나요?" };
   if (mode === "bad-understanding") output = {};
   if (mode === "bad-reading" && !stage.includes("understanding")) output = { ...dungeonReading, endingEvidence: "입력에 없는 결말" };
-  response.end(JSON.stringify({ id: "resp_local", object: "response", status: mode === "incomplete" ? "incomplete" : "completed", output: [{ type: "message", role: "assistant", status: "completed", content: [{ type: "output_text", text: JSON.stringify(output), annotations: [] }] }] }));
+  response.end(JSON.stringify({ id: "resp_local", object: "response", status: mode === "incomplete" ? "incomplete" : "completed", usage: { input_tokens: 100, output_tokens: 50, total_tokens: 150 }, output: [{ type: "message", role: "assistant", status: "completed", content: [{ type: "output_text", text: JSON.stringify(output), annotations: [] }] }] }));
 });
 mock.listen(0, "127.0.0.1");
 await once(mock, "listening");
@@ -34,16 +37,19 @@ const port = reserve.address().port;
 await new Promise((resolve) => reserve.close(resolve));
 const base = `http://127.0.0.1:${port}`;
 let logs = "";
+const requestIds = [];
 const child = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "--hostname", "127.0.0.1", "--port", String(port)], {
-  env: { ...process.env, OPENAI_API_KEY: "local-test-only", OPENAI_BASE_URL: `http://127.0.0.1:${mock.address().port}/v1`, OPENAI_DREAM_MODEL: "local-mock", DREAM_INTERPRETATION_MODE: "ai-first", DREAM_REQUEST_TIMEOUT_MS: "1800" },
+  env: { ...process.env, OPENAI_API_KEY: "local-test-only", OPENAI_BASE_URL: `http://127.0.0.1:${mock.address().port}/v1`, DREAM_PIPELINE: "two-step", OPENAI_DREAM_ANALYSIS_MODEL: "local-analysis", OPENAI_DREAM_MODEL: "local-final", DREAM_INTERPRETATION_MODE: "ai-first", DREAM_REQUEST_TIMEOUT_MS: "1800" },
   stdio: ["ignore", "pipe", "pipe"],
 });
 child.stdout.on("data", (data) => { logs += data; });
 child.stderr.on("data", (data) => { logs += data; });
 let serial = 0;
-async function submit(dream = dungeonDream, user) {
-  const response = await fetch(`${base}/api/interpret`, { method: "POST", headers: { "Content-Type": "application/json", "x-vercel-forwarded-for": user || `192.0.2.${++serial}` }, body: JSON.stringify({ dream }) });
-  assert(response.headers.get("x-request-id"));
+async function submit(dream = dungeonDream, user, clarificationKey) {
+  const response = await fetch(`${base}/api/interpret`, { method: "POST", headers: { "Content-Type": "application/json", "x-vercel-forwarded-for": user || `192.0.2.${++serial}` }, body: JSON.stringify({ dream, clarificationKey }) });
+  const requestId = response.headers.get("x-request-id");
+  assert(requestId);
+  requestIds.push(requestId);
   assert.equal(response.headers.get("cache-control"), "no-store");
   return { status: response.status, body: await response.json() };
 }
@@ -72,10 +78,37 @@ try {
   assert.equal(success.status, 200);
   assert.equal(success.body.interpretation.narrative.version, "v16");
   assert.equal(success.body.interpretation.narrative.paragraphs.length, 3);
-  assert.equal(providerCalls - beforeSuccess, 2, "짧은 테스트 시간 제한에서는 장면 파악과 해설만 호출한다");
+  assert.equal(providerCalls - beforeSuccess, 2, "정상적인 two-step 해설은 두 번만 호출한다");
+  assert.deepEqual(providerRequests.slice(-2).map(({ model, stage }) => [model, stage]), [["local-analysis", "dream_understanding_v16"], ["local-final", "dream_final-reading_v16"]]);
   assert.deepEqual(await submit(dungeonDream, repeatUser), success);
   assert.deepEqual(await submit(dungeonDream, repeatUser), success);
   assert.equal(providerCalls - beforeSuccess, 6, "같은 사용자의 반복 요청도 저장소나 횟수 제한 없이 다시 생성한다");
+  for (const requestId of requestIds.slice(-3)) {
+    assert.equal(logs.match(new RegExp(`dream_openai_call_start \\{\\n  requestId: '${requestId}'`, "gu"))?.length, 2);
+    assert.equal(logs.match(new RegExp(`dream_openai_call_complete \\{\\n  requestId: '${requestId}'`, "gu"))?.length, 2);
+    assert.match(logs, new RegExp(`dream_interpret_complete \\{\\n  requestId: '${requestId}'`, "u"));
+  }
+  assert.match(logs, /dream_openai_call_complete[\s\S]*inputTokens: 100[\s\S]*outputTokens: 50[\s\S]*totalTokens: 150/u);
+  assert.match(logs, /dream_interpret_complete[\s\S]*openaiCalls: 2[\s\S]*inputTokens: 200[\s\S]*outputTokens: 100[\s\S]*totalTokens: 300/u);
+  mode = "clarification";
+  const beforeClarification = providerCalls;
+  const clarification = await submit();
+  assert.equal(clarification.status, 200);
+  assert.equal(clarification.body.status, "clarification_required");
+  assert.equal(providerCalls - beforeClarification, 1, "확인 질문은 분석 단계만 호출한다");
+  const confirmed = await submit(dungeonDream, undefined, "semantic-clarification");
+  assert.equal(confirmed.status, 200);
+  assert.equal(confirmed.body.interpretation.narrative.version, "v16");
+  assert.equal(providerCalls - beforeClarification, 3, "확인 후 요청은 분석과 최종 해설을 호출한다");
+  mode = "bad-understanding";
+  const beforeInputCases = providerCalls;
+  assert.equal((await submit("하얀 방에서 문을 열고 나왔어요. 그때 기분은 평온했어요.")).status, 503);
+  assert.equal((await submit("길을 따라 걸었어요. ".repeat(55))).status, 503);
+  assert.equal(providerCalls - beforeInputCases, 2, "짧고 긴 유효 입력은 제공자 단계까지 도달한다");
+  const beforeDeathDreams = providerCalls;
+  assert.equal((await submit("꿈에서 제가 죽었습니다. 현실의 제 안전과는 무관한 꿈 장면이었어요. 무슨 뜻인가요?")).status, 503);
+  assert.equal((await submit("돌아가신 가족이 꿈에 나와서 저에게 식사를 차려 주었습니다. 반가웠어요.")).status, 503);
+  assert.equal(providerCalls - beforeDeathDreams, 2, "꿈속 죽음이나 돌아가신 가족은 입력 단계에서 차단되지 않는다. 모의 제공자의 다른 꿈 근거 때문에 후속 검증에서 실패한다");
   const beforeInvalid = providerCalls;
   assert.equal((await submit("")).status, 400, "빈 입력 차단");
   assert.equal((await submit("꿈".repeat(751))).status, 400, "1,500자 초과 입력 차단");

@@ -73,7 +73,7 @@ export const understandingSchema = {
         required: ["order", "description", "emotion", "evidence"],
         properties: {
           order: { type: "integer", minimum: 1, maximum: 10 },
-          description: { type: "string", minLength: 8, maxLength: 300 },
+          description: { type: "string", minLength: 2, maxLength: 300 },
           emotion: { type: ["string", "null"] },
           evidence: { type: "string", minLength: 2, maxLength: 300 },
         },
@@ -170,6 +170,48 @@ function evidenceMatches(dream: string, evidence: string) {
   return quote.length >= 2 && source.includes(quote);
 }
 
+function wordsWithOffsets(value: string) {
+  return Array.from(value.matchAll(/[\p{L}\p{N}]+/gu), (match) => ({
+    word: match[0].normalize("NFKC").toLocaleLowerCase("ko-KR"),
+    start: match.index,
+    end: match.index + match[0].length,
+  }));
+}
+
+// 한 단어 내부의 한 글자 삽입·누락만 허용합니다. 부정어 등 의미를 뒤집을 수 있는 글자는 제외합니다.
+function minorInternalTypo(quoted: string, original: string) {
+  const longer = Array.from(quoted.length > original.length ? quoted : original);
+  const shorter = Array.from(quoted.length > original.length ? original : quoted);
+  if (longer.length - shorter.length !== 1 || shorter.length < 3 || longer[0] !== shorter[0] || longer.at(-1) !== shorter.at(-1)) return false;
+  for (let index = 1; index < longer.length - 1; index++) {
+    if (/[안못않없]/u.test(longer[index])) continue;
+    if (longer.filter((_, position) => position !== index).join("") === shorter.join("")) return true;
+  }
+  return false;
+}
+
+function groundedEvidence(dream: string, evidence: string): string | null {
+  if (evidenceMatches(dream, evidence)) return evidence;
+  const quoted = wordsWithOffsets(evidence);
+  const source = wordsWithOffsets(dream);
+  if (quoted.length < 3 || quoted.length > source.length) return null;
+  const candidates: string[] = [];
+  for (let index = 0; index <= source.length - quoted.length; index++) {
+    let typoCount = 0;
+    let exactCount = 0;
+    for (let offset = 0; offset < quoted.length; offset++) {
+      if (quoted[offset].word === source[index + offset].word) exactCount++;
+      else if (minorInternalTypo(quoted[offset].word, source[index + offset].word)) typoCount++;
+      else { typoCount = 2; break; }
+    }
+    if (typoCount === 1 && exactCount >= 2) {
+      candidates.push(dream.slice(source[index].start, source[index + quoted.length - 1].end));
+    }
+  }
+  // 여러 위치가 비슷하면 추측하지 않습니다. downstream에는 복원한 원문 구절만 전달합니다.
+  return candidates.length === 1 ? candidates[0] : null;
+}
+
 export function validateUnderstanding(value: unknown, dream: string): DreamUnderstanding | null {
   if (!object(value) || !Array.isArray(value.scenes) || !Array.isArray(value.settings) || !Array.isArray(value.importantSymbols) || !Array.isArray(value.transitions) || !object(value.emotionalArc) || !object(value.agencyArc) || !Array.isArray(value.ambiguities)) return null;
   const scenes = value.scenes.filter(object).map((scene) => ({
@@ -177,19 +219,39 @@ export function validateUnderstanding(value: unknown, dream: string): DreamUnder
     emotion: scene.emotion === null ? null : String(scene.emotion ?? "").trim() || null,
     evidence: String(scene.evidence ?? "").trim(),
   }));
-  if (!scenes.length || scenes.some((scene, index) => scene.order !== index + 1 || scene.description.length < 8 || !evidenceMatches(dream, scene.evidence))) return null;
+  if (!scenes.length || scenes.some((scene, index) => scene.order !== index + 1 || scene.description.length < 2)) return null;
+  let repairedScenes = 0;
+  for (const scene of scenes) {
+    const evidence = groundedEvidence(dream, scene.evidence);
+    if (!evidence) return null;
+    if (evidence !== scene.evidence) repairedScenes++;
+    scene.evidence = evidence;
+    // 감정 메모는 해당 장면의 원문 인용에 직접 나타난 경우에만 다음 단계로 넘깁니다.
+    if (scene.emotion && !evidenceMatches(scene.evidence, scene.emotion)) scene.emotion = null;
+  }
+  if (repairedScenes > 1) return null;
   const transitions = value.transitions.filter(object).map((item) => ({
     from: String(item.from ?? "").trim(), to: String(item.to ?? "").trim(),
     meaningCandidate: String(item.meaningCandidate ?? "").trim(), evidence: String(item.evidence ?? "").trim(),
   }));
-  if (transitions.some((item) => !item.from || !item.to || !evidenceMatches(dream, item.evidence))) return null;
+  if (transitions.some((item) => !item.from || !item.to)) return null;
+  const groundedTransitions = transitions.flatMap((transition) => {
+    const evidence = groundedEvidence(dream, transition.evidence);
+    return evidence ? [{ ...transition, evidence }] : [];
+  });
+  const droppedTransitions = transitions.length - groundedTransitions.length;
+  if (droppedTransitions > 1 || (droppedTransitions && (scenes.length < 2 || !groundedTransitions.length))) return null;
   const understanding: DreamUnderstanding = {
     summaryOfDream: String(value.summaryOfDream ?? "").trim(),
     settings: value.settings.map(String).map((item) => item.trim()).filter(Boolean).slice(0, 8),
     scenes,
     importantSymbols: value.importantSymbols.map(String).map((item) => item.trim()).filter((item) => isMeaningfulLabel(item)).slice(0, 8),
-    transitions,
-    emotionalArc: { beginning: nullable(value.emotionalArc.beginning), middle: nullable(value.emotionalArc.middle), ending: nullable(value.emotionalArc.ending) },
+    transitions: groundedTransitions,
+    emotionalArc: {
+      beginning: groundedEmotion(dream, value.emotionalArc.beginning),
+      middle: groundedEmotion(dream, value.emotionalArc.middle),
+      ending: groundedEmotion(dream, value.emotionalArc.ending),
+    },
     agencyArc: { beginning: nullable(value.agencyArc.beginning), ending: nullable(value.agencyArc.ending), change: nullable(value.agencyArc.change) },
     ending: String(value.ending ?? "").trim(),
     ambiguities: value.ambiguities.map(String).map((item) => item.trim()).filter(Boolean).slice(0, 5),
@@ -204,13 +266,18 @@ function nullable(value: unknown) {
   return String(value).trim() || null;
 }
 
+function groundedEmotion(dream: string, value: unknown) {
+  const emotion = nullable(value);
+  return emotion && evidenceMatches(dream, emotion) ? emotion : null;
+}
+
 function paragraphs(value: string) {
   return value.split(/\n\s*\n/gu).map((item) => item.replace(/\s+/gu, " ").trim()).filter(Boolean);
 }
 
 export function isMeaningfulLabel(value: string) {
   const text = value.trim();
-  return text.length >= 2 && !/^(?:이|가|은|는|을|를|것|그것|행동|상태|요소)$/u.test(text) && !/을\s*변하는\s*행동/u.test(text);
+  return (text.length >= 2 || /^[가-힣]$/u.test(text)) && !/^(?:이|가|은|는|을|를|것|그것|행동|상태|요소)$/u.test(text) && !/을\s*변하는\s*행동/u.test(text);
 }
 
 export function validateReading(value: unknown, understanding: DreamUnderstanding): SemanticReading | null {

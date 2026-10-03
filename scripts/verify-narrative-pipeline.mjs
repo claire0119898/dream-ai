@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { generateNarrative, safePipelineFailure, DreamPipelineError } from "../lib/dreamPipeline.ts";
+import { generateNarrative, generateTwoStepNarrative, safePipelineFailure, DreamPipelineError } from "../lib/dreamPipeline.ts";
 import { validateNarrative, isNarrativeInterpretation } from "../lib/dreamNarrative.ts";
 import { dungeonDream, dungeonUnderstanding, dungeonReading } from "./narrative-fixtures.mjs";
 
@@ -19,6 +19,15 @@ assert.equal(result.status, "complete");
 assert(result.interpretation.integratedInterpretation.length < 750, "짧은 해설도 정상 통과한다");
 assert(isNarrativeInterpretation(result.interpretation));
 assert(!JSON.stringify(result.interpretation).includes("endingEvidence"), "내부 대조 자료는 응답에 포함하지 않는다");
+const twoStepCalls = [];
+const twoStep = await generateTwoStepNarrative(dungeonDream, false, async (call) => {
+  twoStepCalls.push(call);
+  return call.stage === "understanding" ? dungeonUnderstanding : dungeonReading;
+});
+assert.deepEqual(twoStepCalls.map((call) => call.stage), ["understanding", "final-reading"]);
+assert.match(twoStepCalls[1].instructions, /원문과 각 문장을 내부적으로 대조하세요/u);
+assert.match(twoStepCalls[1].instructions, /쉬운/u);
+assert.deepEqual(twoStep.interpretation, result.interpretation, "사용자 응답 형식은 동일하다");
 
 const copied = { ...dungeonReading, paragraphs: Array.from({ length: 5 }, () => ({ text: dungeonDream, highlight: "", evidence: ["던전 같은 곳"] })) };
 assert.equal(validateNarrative(copied, dungeonDream).ok, false, "원문 복사·반복 거부");
@@ -52,6 +61,20 @@ const clarification = await generateNarrative(dungeonDream, false, async (call) 
 });
 assert.equal(clarification.status, "clarification_required");
 assert.deepEqual(clarificationCalls, ["understanding"]);
+const twoStepClarificationCalls = [];
+const twoStepClarification = await generateTwoStepNarrative(dungeonDream, false, async (call) => {
+  twoStepClarificationCalls.push(call.stage);
+  return { ...dungeonUnderstanding, needsClarification: true, clarificationQuestion: "마지막에 무엇을 막으려 했나요?" };
+});
+assert.equal(twoStepClarification.status, "clarification_required");
+assert.deepEqual(twoStepClarificationCalls, ["understanding"]);
+const confirmedCalls = [];
+const confirmed = await generateTwoStepNarrative(dungeonDream, true, async (call) => {
+  confirmedCalls.push(call.stage);
+  return call.stage === "understanding" ? { ...dungeonUnderstanding, needsClarification: true, clarificationQuestion: "마지막에 무엇을 막으려 했나요?" } : dungeonReading;
+});
+assert.equal(confirmed.status, "complete");
+assert.deepEqual(confirmedCalls, ["understanding", "final-reading"]);
 await assert.rejects(generateNarrative(dungeonDream, false, async (call) => call.stage === "understanding" ? dungeonUnderstanding : copied), (e) => e instanceof DreamPipelineError && e.code === "reading_rejected");
 await assert.rejects(generateNarrative(dungeonDream, false, async () => { throw new Error("secret-provider-error"); }), /secret-provider-error/);
 assert(!JSON.stringify(safePipelineFailure(new Error(dungeonDream), "reading")).includes(dungeonDream), "로그에 원문을 포함하지 않는다");

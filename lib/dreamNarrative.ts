@@ -1,5 +1,5 @@
 import type { DreamInterpretation, DreamNarrative } from "../types/dream.ts";
-import type { DreamUnderstanding } from "./dreamSemantic.ts";
+import { isMeaningfulLabel, type DreamUnderstanding } from "./dreamSemantic.ts";
 
 export const NARRATIVE_VERSION = "v16";
 export const READING_CAUTION = "꿈풀이는 상징과 감정을 바탕으로 한 참고 해석이며, 미래의 사건을 예언하지 않습니다.";
@@ -82,6 +82,11 @@ export type NarrativeCheck = { ok: true; value: NarrativeDraft } | { ok: false; 
 const object = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 const normalize = (value: string) => value.normalize("NFKC").replace(/[\s\p{P}\p{S}]/gu, "");
 const text = (value: unknown, min: number, max: number): value is string => typeof value === "string" && value.trim().length >= min && value.length <= max;
+// 원문에 없는 말줄임표는 인용의 양 끝에 붙은 장식일 때만 무시합니다.
+const stripEdgeEllipsis = (quote: string) => quote.trim()
+  .replace(/^(?:(?:\.{3}|…)\s*)+/u, "")
+  .replace(/(?:\s*(?:\.{3}|…))+$/u, "")
+  .trim();
 const INTERNAL = /\b(?:AI|GPT|OpenAI|LLM|API|grounding|confidence|ambiguity)\b|인공지능|프롬프트|파싱|모델|원문에\s*확인|주체가\s*명시|소유자는\s*확인|사실만\s*사용|깨진\s*토큰|<\/?\w|\uFFFD/iu;
 const GENERIC = /마지막에\s*남은\s*감정이\s*전체\s*방향을\s*정하는\s*꿈|이\s*장면이\s*앞뒤\s*장면과|최근\s*비슷한\s*경험이\s*있었다면|비교해\s*보세요|살펴보는\s*것이\s*자연스럽|개별\s*상징은\s*시작과\s*마지막/u;
 const PREDICTION = /(?:재물이\s*들어|임신하게\s*됩|사고가\s*생깁|취업이\s*확정|당첨됩)|곧\s*.{0,18}(?:기회|행운|성공).{0,12}(?:옵니다|찾아|생깁)|반드시\s*.{0,20}(?:성공|합격|발생)/u;
@@ -101,8 +106,15 @@ export function validateNarrative(value: unknown, dream: string, understanding?:
   // 강조는 표현용 부가 정보입니다. 불일치해도 유효한 본문을 버리거나 재생성하지 않습니다.
   const draft = { ...value, paragraphs: value.paragraphs.map((p) => ({ ...p, highlight: p.highlight.length <= 100 && p.text.includes(p.highlight) ? p.highlight : "" })) } as NarrativeDraft;
   const source = normalize(dream);
-  const quoteMatches = (quote: unknown): quote is string => typeof quote === "string" && normalize(quote).length >= 2 && source.includes(normalize(quote));
-  if (!text(draft.centralFocus.symbol, 2, 100) || !quoteMatches(draft.centralFocus.evidence) || !quoteMatches(draft.endingEvidence) || draft.emotionalEvidence.some((q) => !quoteMatches(q))) issues.push("source_evidence");
+  const quoteMatches = (quote: unknown): quote is string => {
+    if (typeof quote !== "string") return false;
+    const cleaned = stripEdgeEllipsis(quote);
+    if (normalize(cleaned).length < 2) return false;
+    // 중간 생략은 문장부호 정규화로 합치지 않습니다. 원문에 말줄임표까지 그대로 있을 때만 유효합니다.
+    if (/(?:\.{3}|…)/u.test(cleaned)) return dream.includes(cleaned);
+    return source.includes(normalize(cleaned));
+  };
+  if (!text(draft.centralFocus.symbol, 1, 100) || !isMeaningfulLabel(draft.centralFocus.symbol) || !quoteMatches(draft.centralFocus.evidence) || !quoteMatches(draft.endingEvidence) || draft.emotionalEvidence.some((q) => !quoteMatches(q))) issues.push("source_evidence");
   if (draft.paragraphs.some((p) => !p.evidence.length || p.evidence.some((q) => !quoteMatches(q)))) issues.push("paragraph_evidence");
   // 결말의 근거가 실제로 원문 후반에 있는지도 대조합니다.
   if (quoteMatches(draft.endingEvidence) && source.lastIndexOf(normalize(draft.endingEvidence)) < source.length * 0.45) issues.push("ending_evidence");
