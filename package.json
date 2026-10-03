@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run test:scenes && npm run test:narrative && npm run test:long-dreams && npm run test:semantic-understanding && npm run test:result && npm run test:api",
     "test:scenes": "node --no-warnings --experimental-strip-types scripts/verify-scene-analysis.mjs",
     "test:narrative": "node --no-warnings --experimental-strip-types scripts/verify-narrative-pipeline.mjs",
     "test:api": "node --no-warnings --experimental-strip-types scripts/verify-narrative-api.mjs",

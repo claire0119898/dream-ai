@@ -35,7 +35,7 @@ await new Promise((resolve) => reserve.close(resolve));
 const base = `http://127.0.0.1:${port}`;
 let logs = "";
 const child = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "--hostname", "127.0.0.1", "--port", String(port)], {
-  env: { ...process.env, OPENAI_API_KEY: "local-test-only", OPENAI_BASE_URL: `http://127.0.0.1:${mock.address().port}/v1`, OPENAI_DREAM_MODEL: "local-mock", UPSTASH_REDIS_REST_URL: "", UPSTASH_REDIS_REST_TOKEN: "", RATE_LIMIT_HASH_SALT: "local-test-salt", DREAM_INTERPRETATION_MODE: "ai-first", DREAM_REQUEST_TIMEOUT_MS: "1800" },
+  env: { ...process.env, OPENAI_API_KEY: "local-test-only", OPENAI_BASE_URL: `http://127.0.0.1:${mock.address().port}/v1`, OPENAI_DREAM_MODEL: "local-mock", DREAM_INTERPRETATION_MODE: "ai-first", DREAM_REQUEST_TIMEOUT_MS: "1800" },
   stdio: ["ignore", "pipe", "pipe"],
 });
 child.stdout.on("data", (data) => { logs += data; });
@@ -64,21 +64,27 @@ try {
   }
   mode = "unauthorized";
   assert.equal((await submit(dungeonDream, "198.51.100.20")).status, 503);
-  assert.equal((await submit(dungeonDream, "198.51.100.20")).status, 503, "실패 후 재시도 잠금 해제");
-  assert.equal((await submit(dungeonDream, "198.51.100.20")).status, 429, "실패 시에도 비용 한도 유지");
+  assert.equal((await submit(dungeonDream, "198.51.100.20")).status, 503, "같은 입력도 재시도할 수 있다");
   mode = "success";
-  const success = await submit();
+  const beforeSuccess = providerCalls;
+  const repeatUser = "198.51.100.21";
+  const success = await submit(dungeonDream, repeatUser);
   assert.equal(success.status, 200);
   assert.equal(success.body.interpretation.narrative.version, "v16");
   assert.equal(success.body.interpretation.narrative.paragraphs.length, 3);
-  const before = providerCalls;
-  assert.deepEqual((await submit()).body, success.body);
-  assert.equal(providerCalls, before, "유효한 캐시만 재사용");
+  assert.equal(providerCalls - beforeSuccess, 2, "짧은 테스트 시간 제한에서는 장면 파악과 해설만 호출한다");
+  assert.deepEqual(await submit(dungeonDream, repeatUser), success);
+  assert.deepEqual(await submit(dungeonDream, repeatUser), success);
+  assert.equal(providerCalls - beforeSuccess, 6, "같은 사용자의 반복 요청도 저장소나 횟수 제한 없이 다시 생성한다");
+  const beforeInvalid = providerCalls;
+  assert.equal((await submit("")).status, 400, "빈 입력 차단");
+  assert.equal((await submit("꿈".repeat(751))).status, 400, "1,500자 초과 입력 차단");
+  assert.equal(providerCalls, beforeInvalid, "잘못된 입력은 OpenAI를 호출하지 않는다");
   const invalid = await fetch(`${base}/api/interpret`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "null" });
   assert.equal(invalid.status, 400);
   assert(logs.includes("dream_reading_failed"));
   assert(!logs.includes(dungeonDream) && !logs.includes("local-test-only"), "원문과 키를 로그에 남기지 않는다");
-  console.log("HTTP 해몽·오류·시간초과·재시도·한도·캐시 검증 통과 (외부 호출 없음)");
+  console.log("HTTP 해몽·오류·시간초과·재시도·저장소 없는 재생성 검증 통과 (외부 호출 없음)");
   if (process.argv.includes("--preview")) {
     console.log(`Local fixture preview: ${base} (Ctrl+C to stop)`);
     await once(process, "SIGINT");

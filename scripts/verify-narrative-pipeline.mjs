@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { generateNarrative, safePipelineFailure, DreamPipelineError } from "../lib/dreamPipeline.ts";
-import { validateNarrative, toNarrativeInterpretation, isNarrativeInterpretation } from "../lib/dreamNarrative.ts";
-import { MemoryExternalUsageStore, cachedInterpretation } from "../lib/externalUsageLimiter.ts";
+import { validateNarrative, isNarrativeInterpretation } from "../lib/dreamNarrative.ts";
 import { dungeonDream, dungeonUnderstanding, dungeonReading } from "./narrative-fixtures.mjs";
 
 assert.equal(validateNarrative(dungeonReading, dungeonDream, dungeonUnderstanding).ok, true);
@@ -57,18 +56,4 @@ await assert.rejects(generateNarrative(dungeonDream, false, async (call) => call
 await assert.rejects(generateNarrative(dungeonDream, false, async () => { throw new Error("secret-provider-error"); }), /secret-provider-error/);
 assert(!JSON.stringify(safePipelineFailure(new Error(dungeonDream), "reading")).includes(dungeonDream), "로그에 원문을 포함하지 않는다");
 
-const store = new MemoryExternalUsageStore();
-const reservation = { identityHash: "test-user", dreamHash: "test-dream" };
-assert.equal(await store.reserve(reservation), "allowed");
-assert.equal(await store.reserve({ ...reservation, identityHash: "other-user" }), "duplicate");
-await store.release(reservation.dreamHash);
-assert.equal(await store.reserve(reservation), "allowed", "실패 후 같은 꿈 재시도 가능");
-await store.release(reservation.dreamHash);
-assert.equal(await store.reserve(reservation), "user_limited", "실패해도 비용 한도 유지");
-const interpretation = toNarrativeInterpretation(dungeonReading, 4);
-await store.setCached("narrative", interpretation);
-assert(cachedInterpretation(await store.getCached("narrative")));
-assert.equal(cachedInterpretation({ schemaVersion: "interpretation-v14", promptVersion: "emotion-first-reading-v14", interpretation }), null);
-assert.equal(cachedInterpretation({ schemaVersion: "interpretation-v15", promptVersion: "narrative-v15", interpretation }), null, "긴 문체의 이전 캐시는 재사용하지 않는다");
-assert.equal(cachedInterpretation({ schemaVersion: "interpretation-v16", promptVersion: "narrative-v16", interpretation: { title: "옛 해몽", coreConclusion: "일반 문구" } }), null);
-console.log("서술형 해몽·실패·교정·재시도·캐시 검증 통과");
+console.log("서술형 해몽·실패·교정 검증 통과");

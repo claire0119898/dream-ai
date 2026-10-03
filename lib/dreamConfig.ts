@@ -31,11 +31,3 @@ export const DREAM_CONTEXT_ENTRY_LIMIT = positiveInteger(
   8
 );
 export const DEFAULT_DREAM_MODEL = "gpt-4.1";
-
-export const EXTERNAL_USAGE_LIMITS = {
-  minute: positiveInteger(["DREAM_RATE_LIMIT_PER_MINUTE", "MINUTE_USER_LIMIT"], 2, 10),
-  hour: positiveInteger(["DREAM_RATE_LIMIT_PER_HOUR", "HOURLY_USER_LIMIT"], 5, 50),
-  day: positiveInteger(["DREAM_RATE_LIMIT_PER_DAY", "DAILY_USER_LIMIT"], 10, 100),
-  globalDay: positiveInteger(["DREAM_GLOBAL_DAILY_LIMIT", "DAILY_EXTERNAL_API_LIMIT"], 50, 10_000),
-  duplicateSeconds: positiveInteger(["DREAM_CACHE_TTL_SECONDS"], 300, 3600),
-} as const;
